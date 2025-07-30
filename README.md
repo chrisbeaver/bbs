@@ -1,4 +1,4 @@
-# Searchlight BBS
+# BBS
 
 A modern recreation of the classic Searchlight BBS software by Frank LaRosa, implemented in Go with SSH connectivity.
 
