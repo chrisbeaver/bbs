@@ -3,6 +3,7 @@ package server
 import (
 	"fmt"
 	"net"
+	"strings"
 
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/term"
@@ -266,13 +267,20 @@ func (s *SSHServer) displayMenu(session *Session, menu *config.MenuItem) {
 	// Clear screen and hide cursor
 	session.term.Write([]byte(ClearScreen + HideCursor))
 
-	// Menu title with color
-	title := s.colorScheme.Colorize(menu.Title, "primary")
-	session.term.Write([]byte(fmt.Sprintf("%s\n", title)))
+	// Terminal width for centering
+	terminalWidth := 79
 
-	// Decorative separator
-	separator := s.colorScheme.DrawSeparator(len(menu.Title), "═")
-	session.term.Write([]byte(separator + "\n\n"))
+	// Menu title with color and centering
+	title := s.colorScheme.Colorize(menu.Title, "primary")
+	centeredTitle := s.colorScheme.CenterText(title, terminalWidth)
+	session.term.Write([]byte(fmt.Sprintf("%s\n", centeredTitle)))
+
+	// Decorative separator (centered to match title width)
+	// Calculate the actual title length (without ANSI codes) for proper separator width
+	cleanTitle := s.colorScheme.stripAnsiCodes(title)
+	separator := s.colorScheme.DrawSeparator(len(cleanTitle), "═")
+	centeredSeparator := s.colorScheme.CenterText(separator, terminalWidth)
+	session.term.Write([]byte(centeredSeparator + "\n\n"))
 
 	// Build accessible menu items (filter by access level)
 	var accessibleItems []config.MenuItem
@@ -282,6 +290,29 @@ func (s *SSHServer) displayMenu(session *Session, menu *config.MenuItem) {
 		}
 	}
 
+	// Calculate maximum width needed for highlight bar
+	maxWidth := 0
+	for _, item := range accessibleItems {
+		if len(item.Description) > maxWidth {
+			maxWidth = len(item.Description)
+		}
+	}
+	// Add some padding
+	maxWidth += 4
+
+	// Calculate centering offset for menu items
+	centerOffset := (terminalWidth - maxWidth) / 2
+	if centerOffset < 0 {
+		centerOffset = 0
+	}
+
+	// Create decorative border pattern
+	borderPattern := s.colorScheme.CreateBorderPattern(maxWidth, "-=")
+	centerPadding := strings.Repeat(" ", centerOffset)
+
+	// Top border
+	session.term.Write([]byte(centerPadding + borderPattern + "\n"))
+
 	// Ensure selected index is valid
 	if session.selectedIndex >= len(accessibleItems) {
 		session.selectedIndex = 0
@@ -290,16 +321,18 @@ func (s *SSHServer) displayMenu(session *Session, menu *config.MenuItem) {
 		session.selectedIndex = len(accessibleItems) - 1
 	}
 
-	// Display menu items with highlighting
+	// Display menu items with highlighting and centering
 	for i, item := range accessibleItems {
 		selected := (i == session.selectedIndex)
-		menuLine := s.colorScheme.HighlightSelection(item.Description, selected)
-		session.term.Write([]byte(menuLine + "\n"))
+		menuLine := s.colorScheme.HighlightSelection(item.Description, selected, maxWidth)
+		session.term.Write([]byte(centerPadding + menuLine + "\n"))
 	}
 
-	// Instructions
-	instructions := "\n" +
-		s.colorScheme.Colorize("Use ", "text") +
+	// Bottom border
+	session.term.Write([]byte(centerPadding + borderPattern + "\n"))
+
+	// Instructions (centered)
+	instructions := s.colorScheme.Colorize("Use ", "text") +
 		s.colorScheme.Colorize("↑↓", "accent") +
 		s.colorScheme.Colorize(" arrow keys to navigate, ", "text") +
 		s.colorScheme.Colorize("Enter", "accent") +
@@ -307,7 +340,8 @@ func (s *SSHServer) displayMenu(session *Session, menu *config.MenuItem) {
 		s.colorScheme.Colorize("Q", "accent") +
 		s.colorScheme.Colorize(" to quit", "text")
 
-	session.term.Write([]byte(instructions))
+	centeredInstructions := s.colorScheme.CenterText(instructions, terminalWidth)
+	session.term.Write([]byte("\n" + centeredInstructions))
 }
 
 // readKey reads a single key press, handling special keys like arrows
@@ -417,32 +451,41 @@ func (s *SSHServer) showBulletins(session *Session) bool {
 	bulletins, err := s.db.GetBulletins(10)
 	if err != nil {
 		errorMsg := s.colorScheme.Colorize("Error retrieving bulletins.", "error")
-		session.term.Write([]byte(errorMsg + "\n"))
+		centeredError := s.colorScheme.CenterText(errorMsg, 79)
+		session.term.Write([]byte(centeredError + "\n"))
 		return true
 	}
 
-	// Colorized header
+	// Colorized header (centered)
 	header := s.colorScheme.Colorize("\n--- System Bulletins ---\n\n", "primary")
-	session.term.Write([]byte(header))
+	centeredHeader := s.colorScheme.CenterText(header, 79)
+	session.term.Write([]byte(centeredHeader))
 
 	if len(bulletins) == 0 {
 		noMsg := s.colorScheme.Colorize("No bulletins available.", "secondary")
-		session.term.Write([]byte(noMsg + "\n"))
+		centeredNoMsg := s.colorScheme.CenterContainerLeftAlign(noMsg, 60, 79)
+		session.term.Write([]byte(centeredNoMsg + "\n"))
 	} else {
+		// Define content container width (about 60 characters)
+		contentWidth := 60
+
 		for i, bulletin := range bulletins {
 			number := s.colorScheme.Colorize(fmt.Sprintf("%d)", i+1), "accent")
 			title := s.colorScheme.Colorize(bulletin.Title, "highlight")
 			author := s.colorScheme.Colorize(fmt.Sprintf("by %s", bulletin.Author), "text")
 			date := s.colorScheme.Colorize(bulletin.CreatedAt.Format("2006-01-02"), "secondary")
 
-			session.term.Write([]byte(fmt.Sprintf("%s %s (%s, %s)\n",
-				number, title, author, date)))
+			bulletinLine := fmt.Sprintf("%s %s (%s, %s)",
+				number, title, author, date)
+			centeredBulletin := s.colorScheme.CenterContainerLeftAlign(bulletinLine, contentWidth, 79)
+			session.term.Write([]byte(centeredBulletin + "\n"))
 		}
 	}
 
-	// Colorized prompt
+	// Colorized prompt (centered)
 	prompt := s.colorScheme.Colorize("\nPress Enter to continue...", "text")
-	session.term.Write([]byte(prompt))
+	centeredPrompt := s.colorScheme.CenterText(prompt, 79)
+	session.term.Write([]byte(centeredPrompt))
 	session.term.ReadLine()
 	return true
 }
@@ -450,25 +493,32 @@ func (s *SSHServer) showBulletins(session *Session) bool {
 func (s *SSHServer) showMessages(session *Session) bool {
 	if session.user == nil {
 		errorMsg := s.colorScheme.Colorize("You must be logged in to read messages.", "error")
-		session.term.Write([]byte(errorMsg + "\n"))
+		centeredError := s.colorScheme.CenterText(errorMsg, 79)
+		session.term.Write([]byte(centeredError + "\n"))
 		return true
 	}
 
 	messages, err := s.db.GetMessages(session.user.Username, 10)
 	if err != nil {
 		errorMsg := s.colorScheme.Colorize("Error retrieving messages.", "error")
-		session.term.Write([]byte(errorMsg + "\n"))
+		centeredError := s.colorScheme.CenterText(errorMsg, 79)
+		session.term.Write([]byte(centeredError + "\n"))
 		return true
 	}
 
-	// Colorized header
+	// Colorized header (centered)
 	header := s.colorScheme.Colorize("\n--- Your Messages ---\n\n", "primary")
-	session.term.Write([]byte(header))
+	centeredHeader := s.colorScheme.CenterText(header, 79)
+	session.term.Write([]byte(centeredHeader))
 
 	if len(messages) == 0 {
 		noMsg := s.colorScheme.Colorize("No messages for you.", "secondary")
-		session.term.Write([]byte(noMsg + "\n"))
+		centeredNoMsg := s.colorScheme.CenterContainerLeftAlign(noMsg, 60, 79)
+		session.term.Write([]byte(centeredNoMsg + "\n"))
 	} else {
+		// Define content container width
+		contentWidth := 60
+
 		for i, msg := range messages {
 			number := s.colorScheme.Colorize(fmt.Sprintf("%d)", i+1), "accent")
 			subject := s.colorScheme.Colorize(msg.Subject, "highlight")
@@ -486,14 +536,17 @@ func (s *SSHServer) showMessages(session *Session) bool {
 			statusColored := s.colorScheme.Colorize(fmt.Sprintf("[%s]", status), statusColor)
 			date := s.colorScheme.Colorize(msg.CreatedAt.Format("2006-01-02"), "secondary")
 
-			session.term.Write([]byte(fmt.Sprintf("%s %s %s %s (%s)\n",
-				number, subject, fromUser, statusColored, date)))
+			messageLine := fmt.Sprintf("%s %s %s %s (%s)",
+				number, subject, fromUser, statusColored, date)
+			centeredMessage := s.colorScheme.CenterContainerLeftAlign(messageLine, contentWidth, 79)
+			session.term.Write([]byte(centeredMessage + "\n"))
 		}
 	}
 
-	// Colorized prompt
+	// Colorized prompt (centered)
 	prompt := s.colorScheme.Colorize("\nPress Enter to continue...", "text")
-	session.term.Write([]byte(prompt))
+	centeredPrompt := s.colorScheme.CenterText(prompt, 79)
+	session.term.Write([]byte(centeredPrompt))
 	session.term.ReadLine()
 	return true
 }

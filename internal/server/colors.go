@@ -134,11 +134,96 @@ func MoveCursorDown(lines int) string {
 }
 
 // Selection highlighting
-func (cs *ColorScheme) HighlightSelection(text string, selected bool) string {
+func (cs *ColorScheme) HighlightSelection(text string, selected bool, width int) string {
 	if selected {
-		return cs.ColorizeWithBg(" > "+text+" ", "highlight", "primary")
+		// Create a full-width highlight bar
+		padding := width - len(text)
+		if padding < 0 {
+			padding = 0
+		}
+		highlightText := " " + text + strings.Repeat(" ", padding-1)
+		return cs.ColorizeWithBg(highlightText, "highlight", "primary")
 	}
-	return "   " + cs.Colorize(text, "text") + " "
+	// Non-selected items get normal padding
+	padding := width - len(text)
+	if padding < 0 {
+		padding = 0
+	}
+	normalText := " " + text + strings.Repeat(" ", padding-1)
+	return cs.Colorize(normalText, "text")
+}
+
+// Create decorative border pattern
+func (cs *ColorScheme) CreateBorderPattern(width int, pattern string) string {
+	if len(pattern) == 0 {
+		pattern = "-"
+	}
+
+	// Repeat the pattern to fill the width
+	repeats := width / len(pattern)
+	remainder := width % len(pattern)
+
+	borderText := strings.Repeat(pattern, repeats)
+	if remainder > 0 {
+		borderText += pattern[:remainder]
+	}
+
+	return cs.Colorize(borderText, "border")
+}
+
+// Center text within a given terminal width
+func (cs *ColorScheme) CenterText(text string, terminalWidth int) string {
+	// Remove ANSI codes to calculate actual text length
+	cleanText := cs.stripAnsiCodes(text)
+	textLen := len(cleanText)
+
+	if textLen >= terminalWidth {
+		return text
+	}
+
+	padding := (terminalWidth - textLen) / 2
+	return strings.Repeat(" ", padding) + text
+}
+
+// Helper function to strip ANSI codes for length calculation
+func (cs *ColorScheme) stripAnsiCodes(text string) string {
+	// Simple ANSI code removal - finds \033[...m sequences
+	result := ""
+	inEscape := false
+
+	for i := 0; i < len(text); i++ {
+		if text[i] == '\033' && i+1 < len(text) && text[i+1] == '[' {
+			inEscape = true
+			i++ // skip the '['
+			continue
+		}
+
+		if inEscape {
+			if text[i] == 'm' {
+				inEscape = false
+			}
+			continue
+		}
+
+		result += string(text[i])
+	}
+
+	return result
+}
+
+// Center container but left-align content within it
+func (cs *ColorScheme) CenterContainerLeftAlign(text string, containerWidth, terminalWidth int) string {
+	// Calculate padding to center the container
+	centerOffset := (terminalWidth - containerWidth) / 2
+	if centerOffset < 0 {
+		centerOffset = 0
+	}
+
+	// Left-align text within the container (with small left margin)
+	leftPadding := strings.Repeat(" ", centerOffset)
+	textWithMargin := " " + text
+
+	return leftPadding + textWithMargin
 }
 
 // ASCII Art and Box Drawing
