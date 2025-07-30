@@ -1,0 +1,41 @@
+#!/bin/bash
+
+# Color demonstration for the BBS
+echo "Searchlight BBS Color Preview"
+echo "============================"
+echo ""
+
+# Display the colors that will be used
+echo -e "\033[36mPrimary (Cyan): Menu titles and headers\033[0m"
+echo -e "\033[31mSecondary (Red): Inactive options and warnings\033[0m"
+echo -e "\033[33mAccent (Yellow): Menu numbers and prompts\033[0m"
+echo -e "\033[37mText (White): Normal text content\033[0m"
+echo -e "\033[34mBorder (Blue): Frames and separators\033[0m"
+echo -e "\033[32mSuccess (Green): Success messages and NEW status\033[0m"
+echo -e "\033[31mError (Red): Error messages\033[0m"
+echo -e "\033[97mHighlight (Bright White): Important text\033[0m"
+echo ""
+
+# Show a sample menu
+echo -e "\033[34m╔══════════════════════════════════════════════════════════════════════════════╗\033[0m"
+echo -e "\033[34m║\033[36m                            Searchlight BBS                            \033[34m║\033[0m"
+echo -e "\033[34m╚══════════════════════════════════════════════════════════════════════════════╝\033[0m"
+echo ""
+echo -e "\033[37mWelcome to Searchlight BBS!\033[0m"
+echo ""
+echo -e "\033[33mWelcome back, sysop!\033[0m"
+echo -e "\033[37mLast call: First time login\033[0m"
+echo -e "\033[37mTotal calls: 1\033[0m"
+echo ""
+echo -e "\033[36mMain Menu\033[0m"
+echo -e "\033[34m═════════\033[0m"
+echo ""
+echo -e "\033[33m1)\033[0m \033[37mRead system bulletins\033[0m"
+echo -e "\033[33m2)\033[0m \033[37mMessage areas\033[0m"
+echo -e "\033[33m3)\033[0m \033[37mFile areas\033[0m"
+echo -e "\033[33m4)\033[0m \033[37mOnline games\033[0m"
+echo -e "\033[33m5)\033[0m \033[37mUser listings\033[0m"
+echo -e "\033[33m6)\033[0m \033[37mSystem operator menu\033[0m"
+echo -e "\033[33m7)\033[0m \033[37mLogoff system\033[0m"
+echo ""
+echo -e "\033[37mEnter your choice\033[31m (or 'quit' to exit)\033[33m: \033[0m"

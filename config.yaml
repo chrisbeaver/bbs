@@ -1,0 +1,69 @@
+server:
+  port: 2323
+  host_key_path: "host_key"
+  max_users: 100
+
+database:
+  path: "bbs.db"
+
+bbs:
+  system_name: "Searchlight BBS"
+  sysop_name: "Sysop"
+  welcome_message: |
+    Welcome to Searchlight BBS!
+    
+    A classic bulletin board system experience over SSH.
+    Connect with other users, read messages, and explore!
+  max_line_length: 79
+  colors:
+    primary: "cyan"
+    secondary: "red"
+    accent: "yellow"
+    text: "white"
+    background: "black"
+    border: "blue"
+    success: "green"
+    error: "red"
+    highlight: "bright_white"
+  menus:
+    - id: "main"
+      title: "Main Menu"
+      description: "Main BBS Menu"
+      command: "main_menu"
+      access_level: 0
+      submenu:
+        - id: "bulletins"
+          title: "Bulletins"
+          description: "Read system bulletins"
+          command: "bulletins"
+          access_level: 0
+        - id: "messages"
+          title: "Messages"
+          description: "Message areas"
+          command: "messages"
+          access_level: 0
+        - id: "files"
+          title: "Files"
+          description: "File areas"
+          command: "files"
+          access_level: 0
+        - id: "games"
+          title: "Games"
+          description: "Online games"
+          command: "games"
+          access_level: 0
+        - id: "users"
+          title: "Users"
+          description: "User listings"
+          command: "users"
+          access_level: 0
+        - id: "sysop"
+          title: "Sysop"
+          description: "System operator menu"
+          command: "sysop"
+          access_level: 255
+        - id: "goodbye"
+          title: "Goodbye"
+          description: "Logoff system"
+          command: "goodbye"
+          access_level: 0
