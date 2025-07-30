@@ -1,6 +1,6 @@
 # BBS
 
-A modern recreation of the classic Searchlight BBS software by Frank LaRosa, implemented in Go with SSH connectivity.
+A modern classic BBS software project, implemented in Go with SSH connectivity.
 
 ## Features
 
