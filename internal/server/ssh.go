@@ -211,11 +211,15 @@ func (s *SSHServer) menuLoop(session *Session) {
 		s.displayMenu(session, currentMenu)
 
 		// Navigation loop
+	NavigationLoop:
 		for {
 			key, err := s.readKey(session)
 			if err != nil {
 				return
 			}
+			
+			// Debug: Show what key was pressed at main menu level
+			//session.term.Write([]byte(fmt.Sprintf("\nMAIN MENU DEBUG: Key pressed: '%s'\n", key)))
 
 			switch key {
 			case "up":
@@ -232,18 +236,18 @@ func (s *SSHServer) menuLoop(session *Session) {
 				}
 				s.displayMenu(session, currentMenu)
 
-			case "enter":
-				// Execute selected item
-				selectedItem := accessibleItems[session.selectedIndex]
-				if !s.executeCommand(session, &selectedItem) {
-					// Show cursor before exiting
-					session.term.Write([]byte(ShowCursor))
-					return
-				}
-				// Continue to redisplay menu after command execution
-				continue
+		case "enter":
+			// Execute selected item
+			selectedItem := accessibleItems[session.selectedIndex]
+			if !s.executeCommand(session, &selectedItem) {
+				// Show cursor before exiting
+				session.term.Write([]byte(ShowCursor))
+				return
+			}
+			// Break out of navigation loop to redisplay menu
+			break NavigationLoop
 
-			case "quit", "q", "Q":
+		case "quit", "q", "Q":
 				// Show cursor and exit
 				session.term.Write([]byte(ShowCursor))
 				goodbyeMsg := s.colorScheme.Colorize("\nThank you for calling! Goodbye!\n", "success")
@@ -457,23 +461,23 @@ func (s *SSHServer) executeBulletinsModule(session *Session) bool {
 	if len(bulletins) == 0 {
 		// Clear screen and show no bulletins message
 		session.term.Write([]byte(ClearScreen + HideCursor))
-		
+
 		header := s.colorScheme.Colorize("System Bulletins", "primary")
 		centeredHeader := s.colorScheme.CenterText(header, 79)
 		session.term.Write([]byte(centeredHeader + "\n"))
-		
+
 		separator := s.colorScheme.DrawSeparator(len("System Bulletins"), "═")
 		centeredSeparator := s.colorScheme.CenterText(separator, 79)
 		session.term.Write([]byte(centeredSeparator + "\n\n"))
-		
+
 		noMsg := s.colorScheme.Colorize("No bulletins available.", "secondary")
 		centeredNoMsg := s.colorScheme.CenterText(noMsg, 79)
 		session.term.Write([]byte(centeredNoMsg + "\n\n"))
-		
+
 		prompt := s.colorScheme.Colorize("Press any key to continue...", "text")
 		centeredPrompt := s.colorScheme.CenterText(prompt, 79)
 		session.term.Write([]byte(centeredPrompt))
-		
+
 		session.term.ReadLine()
 		session.term.Write([]byte(ShowCursor))
 		return true
@@ -495,7 +499,7 @@ func (s *SSHServer) showNavigableBulletinList(session *Session, bulletins []data
 		header := s.colorScheme.Colorize("System Bulletins", "primary")
 		centeredHeader := s.colorScheme.CenterText(header, 79)
 		session.term.Write([]byte(centeredHeader + "\n"))
-		
+
 		separator := s.colorScheme.DrawSeparator(len("System Bulletins"), "═")
 		centeredSeparator := s.colorScheme.CenterText(separator, 79)
 		session.term.Write([]byte(centeredSeparator + "\n\n"))
@@ -509,26 +513,26 @@ func (s *SSHServer) showNavigableBulletinList(session *Session, bulletins []data
 		// Display bulletin list with navigation
 		for i, bulletin := range bulletins {
 			isSelected := (i == selectedIndex)
-			
+
 			// Format bulletin line
 			number := fmt.Sprintf("%2d)", i+1)
 			title := bulletin.Title
 			author := fmt.Sprintf("by %s", bulletin.Author)
 			date := bulletin.CreatedAt.Format("2006-01-02")
-			
+
 			// Truncate title if too long
 			maxTitleLength := contentWidth - len(number) - len(author) - len(date) - 6 // spaces and parentheses
 			if len(title) > maxTitleLength {
 				title = title[:maxTitleLength-3] + "..."
 			}
-			
+
 			bulletinLine := fmt.Sprintf("%s %s (%s, %s)", number, title, author, date)
-			
+
 			// Pad to content width
 			if len(bulletinLine) < contentWidth {
 				bulletinLine += strings.Repeat(" ", contentWidth-len(bulletinLine))
 			}
-			
+
 			if isSelected {
 				// Highlight selected item
 				coloredLine := s.colorScheme.ColorizeWithBg(bulletinLine, "highlight", "primary")
@@ -538,7 +542,7 @@ func (s *SSHServer) showNavigableBulletinList(session *Session, bulletins []data
 				numberColored := s.colorScheme.Colorize(number, "accent")
 				titleColored := s.colorScheme.Colorize(title, "text")
 				authorColored := s.colorScheme.Colorize(fmt.Sprintf("(%s, %s)", author, date), "secondary")
-				
+
 				normalLine := fmt.Sprintf("%s %s %s", numberColored, titleColored, authorColored)
 				// Pad the line to maintain consistent spacing
 				paddedLine := normalLine + strings.Repeat(" ", contentWidth-len(fmt.Sprintf("%s %s (%s, %s)", number, title, author, date)))
@@ -611,14 +615,14 @@ func (s *SSHServer) showSingleBulletin(session *Session, bulletin *database.Bull
 	// Metadata
 	author := s.colorScheme.Colorize(fmt.Sprintf("Author: %s", bulletin.Author), "accent")
 	date := s.colorScheme.Colorize(fmt.Sprintf("Date: %s", bulletin.CreatedAt.Format("2006-01-02 15:04:05")), "secondary")
-	
+
 	session.term.Write([]byte(centerPadding + author + "\n"))
 	session.term.Write([]byte(centerPadding + date + "\n\n"))
 
 	// Bulletin body - word wrap to content width
 	body := bulletin.Body
 	lines := s.wrapText(body, contentWidth)
-	
+
 	for _, line := range lines {
 		coloredLine := s.colorScheme.Colorize(line, "text")
 		session.term.Write([]byte(centerPadding + coloredLine + "\n"))
@@ -638,7 +642,7 @@ func (s *SSHServer) showSingleBulletin(session *Session, bulletin *database.Bull
 func (s *SSHServer) wrapText(text string, width int) []string {
 	var lines []string
 	words := strings.Fields(text)
-	
+
 	if len(words) == 0 {
 		return lines
 	}

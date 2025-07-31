@@ -22,64 +22,26 @@ func main() {
 	}
 	defer db.Close()
 
-	// Create default sysop user
-	sysopUser := &database.User{
-		Username:    "sysop",
-		Password:    "password", // In production, use proper password hashing
-		RealName:    cfg.BBS.SysopName,
-		Email:       "sysop@localhost",
-		AccessLevel: 255, // Maximum access level
-		IsActive:    true,
-	}
-
-	err = db.CreateUser(sysopUser)
+	// Load users from seed data
+	fmt.Println("Loading users from seed data...")
+	err = db.LoadUsersFromSeed()
 	if err != nil {
-		fmt.Printf("Note: Sysop user may already exist: %v\n", err)
+		fmt.Printf("Error loading users from seed data: %v\n", err)
 	} else {
-		fmt.Println("Created default sysop user (username: sysop, password: password)")
+		fmt.Println("Successfully loaded users from seed data")
 	}
 
-	// Create a test user
-	testUser := &database.User{
-		Username:    "test",
-		Password:    "test",
-		RealName:    "Test User",
-		Email:       "test@localhost",
-		AccessLevel: 10,
-		IsActive:    true,
-	}
-
-	err = db.CreateUser(testUser)
+	// Load bulletins from seed data
+	fmt.Println("Loading bulletins from seed data...")
+	err = db.LoadBulletinsFromSeed()
 	if err != nil {
-		fmt.Printf("Note: Test user may already exist: %v\n", err)
+		fmt.Printf("Error loading bulletins from seed data: %v\n", err)
 	} else {
-		fmt.Println("Created test user (username: test, password: test)")
-	}
-
-	// Create some sample bulletins
-	bulletins := []database.Bulletin{
-		{
-			Title:  "Welcome to Searchlight BBS!",
-			Body:   "This is a recreation of the classic Searchlight BBS software.\n\nFeatures:\n- SSH connectivity\n- Multi-user support\n- Message areas\n- File areas\n- Configurable menus\n\nEnjoy your stay!",
-			Author: "Sysop",
-		},
-		{
-			Title:  "System Information",
-			Body:   "This BBS is running on Go with SQLite backend.\n\nTechnical details:\n- Concurrent connections via goroutines\n- SSH terminal interface\n- Flexible menu system\n- YAML configuration",
-			Author: "Sysop",
-		},
-	}
-
-	for _, bulletin := range bulletins {
-		err = db.CreateBulletin(&bulletin)
-		if err != nil {
-			fmt.Printf("Error creating bulletin '%s': %v\n", bulletin.Title, err)
-		} else {
-			fmt.Printf("Created bulletin: %s\n", bulletin.Title)
-		}
+		fmt.Println("Successfully loaded bulletins from seed data")
 	}
 
 	fmt.Println("\nDatabase setup complete!")
 	fmt.Println("You can now run the BBS server with: go run main.go")
-	fmt.Println("Connect via SSH: ssh -p 2323 sysop@localhost")
+	fmt.Println("Connect via SSH: ssh -p 2323 sysop@localhost (password: password)")
+	fmt.Println("Or connect as test user: ssh -p 2323 test@localhost (password: test)")
 }

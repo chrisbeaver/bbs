@@ -19,9 +19,9 @@ type ColorScheme interface {
 
 // Screen control constants
 const (
-	ClearScreen    = "\033[2J\033[H"
-	HideCursor     = "\033[?25l"
-	ShowCursor     = "\033[?25h"
+	ClearScreen = "\033[2J\033[H"
+	HideCursor  = "\033[?25l"
+	ShowCursor  = "\033[?25h"
 )
 
 // Module implements the bulletins functionality
@@ -53,23 +53,23 @@ func (m *Module) Execute(term *term.Terminal) bool {
 	if len(bulletins) == 0 {
 		// Clear screen and show no bulletins message
 		term.Write([]byte(ClearScreen + HideCursor))
-		
+
 		header := m.colorScheme.Colorize("System Bulletins", "primary")
 		centeredHeader := m.colorScheme.CenterText(header, 79)
 		term.Write([]byte(centeredHeader + "\n"))
-		
+
 		separator := m.colorScheme.DrawSeparator(len("System Bulletins"), "═")
 		centeredSeparator := m.colorScheme.CenterText(separator, 79)
 		term.Write([]byte(centeredSeparator + "\n\n"))
-		
+
 		noMsg := m.colorScheme.Colorize("No bulletins available.", "secondary")
 		centeredNoMsg := m.colorScheme.CenterText(noMsg, 79)
 		term.Write([]byte(centeredNoMsg + "\n\n"))
-		
+
 		prompt := m.colorScheme.Colorize("Press any key to continue...", "text")
 		centeredPrompt := m.colorScheme.CenterText(prompt, 79)
 		term.Write([]byte(centeredPrompt))
-		
+
 		m.waitForKey(term)
 		term.Write([]byte(ShowCursor))
 		return true
@@ -91,7 +91,7 @@ func (m *Module) showBulletinList(term *term.Terminal, bulletins []database.Bull
 		header := m.colorScheme.Colorize("System Bulletins", "primary")
 		centeredHeader := m.colorScheme.CenterText(header, 79)
 		term.Write([]byte(centeredHeader + "\n"))
-		
+
 		separator := m.colorScheme.DrawSeparator(len("System Bulletins"), "═")
 		centeredSeparator := m.colorScheme.CenterText(separator, 79)
 		term.Write([]byte(centeredSeparator + "\n\n"))
@@ -105,26 +105,26 @@ func (m *Module) showBulletinList(term *term.Terminal, bulletins []database.Bull
 		// Display bulletin list with navigation
 		for i, bulletin := range bulletins {
 			isSelected := (i == selectedIndex)
-			
+
 			// Format bulletin line
 			number := fmt.Sprintf("%2d)", i+1)
 			title := bulletin.Title
 			author := fmt.Sprintf("by %s", bulletin.Author)
 			date := bulletin.CreatedAt.Format("2006-01-02")
-			
+
 			// Truncate title if too long
 			maxTitleLength := contentWidth - len(number) - len(author) - len(date) - 6 // spaces and parentheses
 			if len(title) > maxTitleLength {
 				title = title[:maxTitleLength-3] + "..."
 			}
-			
+
 			bulletinLine := fmt.Sprintf("%s %s (%s, %s)", number, title, author, date)
-			
+
 			// Pad to content width
 			if len(bulletinLine) < contentWidth {
 				bulletinLine += strings.Repeat(" ", contentWidth-len(bulletinLine))
 			}
-			
+
 			if isSelected {
 				// Highlight selected item
 				coloredLine := m.colorScheme.ColorizeWithBg(bulletinLine, "highlight", "primary")
@@ -134,7 +134,7 @@ func (m *Module) showBulletinList(term *term.Terminal, bulletins []database.Bull
 				numberColored := m.colorScheme.Colorize(number, "accent")
 				titleColored := m.colorScheme.Colorize(title, "text")
 				authorColored := m.colorScheme.Colorize(fmt.Sprintf("(%s, %s)", author, date), "secondary")
-				
+
 				normalLine := fmt.Sprintf("%s %s %s", numberColored, titleColored, authorColored)
 				// Pad the line to maintain consistent spacing
 				paddedLine := normalLine + strings.Repeat(" ", contentWidth-len(fmt.Sprintf("%s %s (%s, %s)", number, title, author, date)))
@@ -207,14 +207,14 @@ func (m *Module) showBulletin(term *term.Terminal, bulletin *database.Bulletin) 
 	// Metadata
 	author := m.colorScheme.Colorize(fmt.Sprintf("Author: %s", bulletin.Author), "accent")
 	date := m.colorScheme.Colorize(fmt.Sprintf("Date: %s", bulletin.CreatedAt.Format("2006-01-02 15:04:05")), "secondary")
-	
+
 	term.Write([]byte(centerPadding + author + "\n"))
 	term.Write([]byte(centerPadding + date + "\n\n"))
 
 	// Bulletin body - word wrap to content width
 	body := bulletin.Body
 	lines := m.wrapText(body, contentWidth)
-	
+
 	for _, line := range lines {
 		coloredLine := m.colorScheme.Colorize(line, "text")
 		term.Write([]byte(centerPadding + coloredLine + "\n"))
@@ -234,7 +234,7 @@ func (m *Module) showBulletin(term *term.Terminal, bulletin *database.Bulletin) 
 func (m *Module) wrapText(text string, width int) []string {
 	var lines []string
 	words := strings.Fields(text)
-	
+
 	if len(words) == 0 {
 		return lines
 	}
@@ -275,11 +275,11 @@ func (m *Module) readKey(term *term.Terminal) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	
+
 	if input == "" {
 		return "enter", nil
 	}
-	
+
 	switch strings.ToLower(input) {
 	case "q", "quit":
 		return "quit", nil

@@ -218,3 +218,34 @@ func (db *DB) CreateBulletin(bulletin *Bulletin) error {
 	_, err := db.conn.Exec(query, bulletin.Title, bulletin.Body, bulletin.Author, time.Now())
 	return err
 }
+
+// UpdateBulletin updates an existing bulletin
+func (db *DB) UpdateBulletin(id int, title, body string) error {
+	query := `UPDATE bulletins SET title = ?, body = ? WHERE id = ?`
+	_, err := db.conn.Exec(query, title, body, id)
+	return err
+}
+
+// DeleteBulletin deletes a bulletin by ID
+func (db *DB) DeleteBulletin(id int) error {
+	query := `DELETE FROM bulletins WHERE id = ?`
+	_, err := db.conn.Exec(query, id)
+	return err
+}
+
+// GetBulletinByID retrieves a single bulletin by ID
+func (db *DB) GetBulletinByID(id int) (*Bulletin, error) {
+	query := `SELECT id, title, body, author, created_at, expires_at
+			  FROM bulletins WHERE id = ?`
+
+	bulletin := &Bulletin{}
+	err := db.conn.QueryRow(query, id).Scan(
+		&bulletin.ID, &bulletin.Title, &bulletin.Body,
+		&bulletin.Author, &bulletin.CreatedAt, &bulletin.ExpiresAt)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return bulletin, nil
+}
