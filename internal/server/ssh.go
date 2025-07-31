@@ -240,8 +240,8 @@ func (s *SSHServer) menuLoop(session *Session) {
 					session.term.Write([]byte(ShowCursor))
 					return
 				}
-				// Don't reset selection - keep it at the current position
-				break
+				// Continue to redisplay menu after command execution
+				continue
 
 			case "quit", "q", "Q":
 				// Show cursor and exit
@@ -253,11 +253,6 @@ func (s *SSHServer) menuLoop(session *Session) {
 			default:
 				// Ignore other keys
 				continue
-			}
-
-			// Break out of navigation loop to redisplay menu
-			if key == "enter" {
-				break
 			}
 		}
 	}
@@ -417,7 +412,7 @@ func (s *SSHServer) processCommand(session *Session, menu *config.MenuItem, inpu
 func (s *SSHServer) executeCommand(session *Session, item *config.MenuItem) bool {
 	switch item.Command {
 	case "bulletins":
-		return s.showBulletins(session)
+		return s.executeBulletinsModule(session)
 	case "messages":
 		return s.showMessages(session)
 	case "files":
@@ -445,6 +440,235 @@ func (s *SSHServer) executeCommand(session *Session, item *config.MenuItem) bool
 		session.term.Write([]byte(msg + "\n"))
 		return true
 	}
+}
+
+// executeBulletinsModule creates and runs the bulletins module with proper key handling
+func (s *SSHServer) executeBulletinsModule(session *Session) bool {
+	// Get bulletins from database
+	bulletins, err := s.db.GetBulletins(50)
+	if err != nil {
+		errorMsg := s.colorScheme.Colorize("Error retrieving bulletins.", "error")
+		centeredError := s.colorScheme.CenterText(errorMsg, 79)
+		session.term.Write([]byte(centeredError + "\n"))
+		session.term.ReadLine() // Wait for key
+		return true
+	}
+
+	if len(bulletins) == 0 {
+		// Clear screen and show no bulletins message
+		session.term.Write([]byte(ClearScreen + HideCursor))
+		
+		header := s.colorScheme.Colorize("System Bulletins", "primary")
+		centeredHeader := s.colorScheme.CenterText(header, 79)
+		session.term.Write([]byte(centeredHeader + "\n"))
+		
+		separator := s.colorScheme.DrawSeparator(len("System Bulletins"), "═")
+		centeredSeparator := s.colorScheme.CenterText(separator, 79)
+		session.term.Write([]byte(centeredSeparator + "\n\n"))
+		
+		noMsg := s.colorScheme.Colorize("No bulletins available.", "secondary")
+		centeredNoMsg := s.colorScheme.CenterText(noMsg, 79)
+		session.term.Write([]byte(centeredNoMsg + "\n\n"))
+		
+		prompt := s.colorScheme.Colorize("Press any key to continue...", "text")
+		centeredPrompt := s.colorScheme.CenterText(prompt, 79)
+		session.term.Write([]byte(centeredPrompt))
+		
+		session.term.ReadLine()
+		session.term.Write([]byte(ShowCursor))
+		return true
+	}
+
+	// Show navigable bulletin list using the same key handling as menus
+	return s.showNavigableBulletinList(session, bulletins)
+}
+
+// showNavigableBulletinList displays a navigable list of bulletins
+func (s *SSHServer) showNavigableBulletinList(session *Session, bulletins []database.Bulletin) bool {
+	selectedIndex := 0
+
+	for {
+		// Clear screen and hide cursor
+		session.term.Write([]byte(ClearScreen + HideCursor))
+
+		// Display header
+		header := s.colorScheme.Colorize("System Bulletins", "primary")
+		centeredHeader := s.colorScheme.CenterText(header, 79)
+		session.term.Write([]byte(centeredHeader + "\n"))
+		
+		separator := s.colorScheme.DrawSeparator(len("System Bulletins"), "═")
+		centeredSeparator := s.colorScheme.CenterText(separator, 79)
+		session.term.Write([]byte(centeredSeparator + "\n\n"))
+
+		// Calculate display area
+		terminalWidth := 79
+		contentWidth := 70
+		centerOffset := (terminalWidth - contentWidth) / 2
+		centerPadding := strings.Repeat(" ", centerOffset)
+
+		// Display bulletin list with navigation
+		for i, bulletin := range bulletins {
+			isSelected := (i == selectedIndex)
+			
+			// Format bulletin line
+			number := fmt.Sprintf("%2d)", i+1)
+			title := bulletin.Title
+			author := fmt.Sprintf("by %s", bulletin.Author)
+			date := bulletin.CreatedAt.Format("2006-01-02")
+			
+			// Truncate title if too long
+			maxTitleLength := contentWidth - len(number) - len(author) - len(date) - 6 // spaces and parentheses
+			if len(title) > maxTitleLength {
+				title = title[:maxTitleLength-3] + "..."
+			}
+			
+			bulletinLine := fmt.Sprintf("%s %s (%s, %s)", number, title, author, date)
+			
+			// Pad to content width
+			if len(bulletinLine) < contentWidth {
+				bulletinLine += strings.Repeat(" ", contentWidth-len(bulletinLine))
+			}
+			
+			if isSelected {
+				// Highlight selected item
+				coloredLine := s.colorScheme.ColorizeWithBg(bulletinLine, "highlight", "primary")
+				session.term.Write([]byte(centerPadding + coloredLine + "\n"))
+			} else {
+				// Normal item
+				numberColored := s.colorScheme.Colorize(number, "accent")
+				titleColored := s.colorScheme.Colorize(title, "text")
+				authorColored := s.colorScheme.Colorize(fmt.Sprintf("(%s, %s)", author, date), "secondary")
+				
+				normalLine := fmt.Sprintf("%s %s %s", numberColored, titleColored, authorColored)
+				// Pad the line to maintain consistent spacing
+				paddedLine := normalLine + strings.Repeat(" ", contentWidth-len(fmt.Sprintf("%s %s (%s, %s)", number, title, author, date)))
+				session.term.Write([]byte(centerPadding + paddedLine + "\n"))
+			}
+		}
+
+		// Instructions
+		instructions := s.colorScheme.Colorize("\nUse ", "text") +
+			s.colorScheme.Colorize("↑↓", "accent") +
+			s.colorScheme.Colorize(" to navigate, ", "text") +
+			s.colorScheme.Colorize("Enter", "accent") +
+			s.colorScheme.Colorize(" to read, ", "text") +
+			s.colorScheme.Colorize("Q", "accent") +
+			s.colorScheme.Colorize(" to return", "text")
+
+		centeredInstructions := s.colorScheme.CenterText(instructions, 79)
+		session.term.Write([]byte("\n" + centeredInstructions))
+
+		// Handle input using the same key reading as menus
+		key, err := s.readKey(session)
+		if err != nil {
+			session.term.Write([]byte(ShowCursor))
+			return true
+		}
+
+		switch key {
+		case "up":
+			selectedIndex--
+			if selectedIndex < 0 {
+				selectedIndex = len(bulletins) - 1
+			}
+		case "down":
+			selectedIndex++
+			if selectedIndex >= len(bulletins) {
+				selectedIndex = 0
+			}
+		case "enter":
+			// Show selected bulletin
+			if selectedIndex >= 0 && selectedIndex < len(bulletins) {
+				s.showSingleBulletin(session, &bulletins[selectedIndex])
+			}
+		case "quit", "q", "Q":
+			session.term.Write([]byte(ShowCursor))
+			return true
+		}
+	}
+}
+
+// showSingleBulletin displays a single bulletin
+func (s *SSHServer) showSingleBulletin(session *Session, bulletin *database.Bulletin) {
+	// Clear screen
+	session.term.Write([]byte(ClearScreen + HideCursor))
+
+	terminalWidth := 79
+	contentWidth := 70
+	centerOffset := (terminalWidth - contentWidth) / 2
+	centerPadding := strings.Repeat(" ", centerOffset)
+
+	// Header with bulletin title
+	title := s.colorScheme.Colorize(bulletin.Title, "primary")
+	centeredTitle := s.colorScheme.CenterText(title, terminalWidth)
+	session.term.Write([]byte(centeredTitle + "\n"))
+
+	// Separator
+	separator := s.colorScheme.DrawSeparator(len(bulletin.Title), "═")
+	centeredSeparator := s.colorScheme.CenterText(separator, terminalWidth)
+	session.term.Write([]byte(centeredSeparator + "\n\n"))
+
+	// Metadata
+	author := s.colorScheme.Colorize(fmt.Sprintf("Author: %s", bulletin.Author), "accent")
+	date := s.colorScheme.Colorize(fmt.Sprintf("Date: %s", bulletin.CreatedAt.Format("2006-01-02 15:04:05")), "secondary")
+	
+	session.term.Write([]byte(centerPadding + author + "\n"))
+	session.term.Write([]byte(centerPadding + date + "\n\n"))
+
+	// Bulletin body - word wrap to content width
+	body := bulletin.Body
+	lines := s.wrapText(body, contentWidth)
+	
+	for _, line := range lines {
+		coloredLine := s.colorScheme.Colorize(line, "text")
+		session.term.Write([]byte(centerPadding + coloredLine + "\n"))
+	}
+
+	// Footer prompt
+	prompt := s.colorScheme.Colorize("\nPress any key to return to bulletin list...", "text")
+	centeredPrompt := s.colorScheme.CenterText(prompt, terminalWidth)
+	session.term.Write([]byte(centeredPrompt))
+
+	// Wait for key press
+	session.term.ReadLine()
+	session.term.Write([]byte(ShowCursor))
+}
+
+// wrapText wraps text to specified width
+func (s *SSHServer) wrapText(text string, width int) []string {
+	var lines []string
+	words := strings.Fields(text)
+	
+	if len(words) == 0 {
+		return lines
+	}
+
+	currentLine := ""
+	for _, word := range words {
+		// Check if adding this word would exceed the width
+		testLine := currentLine
+		if testLine != "" {
+			testLine += " "
+		}
+		testLine += word
+
+		if len(testLine) <= width {
+			currentLine = testLine
+		} else {
+			// Start a new line
+			if currentLine != "" {
+				lines = append(lines, currentLine)
+			}
+			currentLine = word
+		}
+	}
+
+	// Add the last line
+	if currentLine != "" {
+		lines = append(lines, currentLine)
+	}
+
+	return lines
 }
 
 func (s *SSHServer) showBulletins(session *Session) bool {
