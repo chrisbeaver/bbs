@@ -26,6 +26,7 @@ type Session struct {
 	term          *term.Terminal
 	user          *database.User
 	currentMenu   string
+	menuHistory   []string // Stack to track menu navigation
 	selectedIndex int
 	authenticated bool
 }
@@ -249,7 +250,28 @@ func (s *SSHServer) menuLoop(session *Session) {
 				break NavigationLoop
 
 			case "quit", "q", "Q":
-				// Show cursor and exit
+				// Handle Q key - return to previous menu (only works on submenus)
+				if session.currentMenu == "main" {
+					// Q does nothing on main menu
+					continue
+				} else {
+					// Return to previous menu
+					if len(session.menuHistory) > 0 {
+						// Pop from history stack
+						session.currentMenu = session.menuHistory[len(session.menuHistory)-1]
+						session.menuHistory = session.menuHistory[:len(session.menuHistory)-1]
+						session.selectedIndex = 0 // Reset selection
+						break NavigationLoop
+					} else {
+						// Fallback to main menu if history is empty
+						session.currentMenu = "main"
+						session.selectedIndex = 0
+						break NavigationLoop
+					}
+				}
+
+			case "goodbye", "g", "G":
+				// Handle G key - goodbye from any menu
 				session.term.Write([]byte(ShowCursor))
 				goodbyeMsg := s.colorScheme.Colorize("\nThank you for calling! Goodbye!\n", "success")
 				session.term.Write([]byte(goodbyeMsg))
@@ -331,14 +353,27 @@ func (s *SSHServer) displayMenu(session *Session, menu *config.MenuItem) {
 	// Bottom border
 	session.term.Write([]byte(centerPadding + borderPattern + "\n"))
 
-	// Instructions (centered)
-	instructions := s.colorScheme.Colorize("Use ", "text") +
-		s.colorScheme.Colorize("↑↓", "accent") +
-		s.colorScheme.Colorize(" arrow keys to navigate, ", "text") +
-		s.colorScheme.Colorize("Enter", "accent") +
-		s.colorScheme.Colorize(" to select, ", "text") +
-		s.colorScheme.Colorize("Q", "accent") +
-		s.colorScheme.Colorize(" to quit", "text")
+	// Instructions (centered) - different for main menu vs submenus
+	var instructions string
+	if session.currentMenu == "main" {
+		instructions = s.colorScheme.Colorize("Use ", "text") +
+			s.colorScheme.Colorize("↑↓", "accent") +
+			s.colorScheme.Colorize(" arrow keys to navigate, ", "text") +
+			s.colorScheme.Colorize("Enter", "accent") +
+			s.colorScheme.Colorize(" to select, ", "text") +
+			s.colorScheme.Colorize("G", "accent") +
+			s.colorScheme.Colorize(" for goodbye", "text")
+	} else {
+		instructions = s.colorScheme.Colorize("Use ", "text") +
+			s.colorScheme.Colorize("↑↓", "accent") +
+			s.colorScheme.Colorize(" arrow keys to navigate, ", "text") +
+			s.colorScheme.Colorize("Enter", "accent") +
+			s.colorScheme.Colorize(" to select, ", "text") +
+			s.colorScheme.Colorize("Q", "accent") +
+			s.colorScheme.Colorize(" to return, ", "text") +
+			s.colorScheme.Colorize("G", "accent") +
+			s.colorScheme.Colorize(" for goodbye", "text")
+	}
 
 	centeredInstructions := s.colorScheme.CenterText(instructions, terminalWidth)
 	session.term.Write([]byte("\n" + centeredInstructions))
@@ -427,6 +462,8 @@ func (s *SSHServer) isMenuCommand(command string) bool {
 func (s *SSHServer) executeCommand(session *Session, item *config.MenuItem) bool {
 	// First check if this command refers to a menu
 	if s.isMenuCommand(item.Command) {
+		// Add current menu to history before navigating
+		session.menuHistory = append(session.menuHistory, session.currentMenu)
 		session.currentMenu = item.Command
 		return true
 	}
