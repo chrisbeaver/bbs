@@ -85,13 +85,13 @@ func (be *BulletinEditor) Execute(term *term.Terminal) bool {
 
 		switch strings.ToLower(strings.TrimSpace(input)) {
 		case "1":
-			be.listBulletins(term)
+			be.ListBulletins(term)
 		case "2":
-			be.createBulletin(term)
+			be.CreateBulletin(term)
 		case "3":
-			be.editBulletin(term)
+			be.EditBulletin(term)
 		case "4":
-			be.deleteBulletin(term)
+			be.DeleteBulletin(term)
 		case "q", "quit":
 			term.Write([]byte(ShowCursor))
 			return true
@@ -101,8 +101,8 @@ func (be *BulletinEditor) Execute(term *term.Terminal) bool {
 	}
 }
 
-// listBulletins shows all bulletins
-func (be *BulletinEditor) listBulletins(term *term.Terminal) {
+// ListBulletins displays a list of all bulletins
+func (be *BulletinEditor) ListBulletins(term *term.Terminal) {
 	bulletins, err := be.db.GetBulletins(50)
 	if err != nil {
 		be.showMessage(term, "Error retrieving bulletins: "+err.Error(), "error")
@@ -140,8 +140,8 @@ func (be *BulletinEditor) listBulletins(term *term.Terminal) {
 	be.showMessage(term, "\nPress any key to continue...", "text")
 }
 
-// createBulletin creates a new bulletin
-func (be *BulletinEditor) createBulletin(term *term.Terminal) {
+// CreateBulletin creates a new bulletin
+func (be *BulletinEditor) CreateBulletin(term *term.Terminal) {
 	term.Write([]byte(ClearScreen + ShowCursor))
 
 	// Get title
@@ -184,8 +184,8 @@ func (be *BulletinEditor) createBulletin(term *term.Terminal) {
 	}
 }
 
-// editBulletin edits an existing bulletin
-func (be *BulletinEditor) editBulletin(term *term.Terminal) {
+// EditBulletin edits an existing bulletin
+func (be *BulletinEditor) EditBulletin(term *term.Terminal) {
 	term.Write([]byte(ClearScreen + ShowCursor))
 
 	term.Write([]byte(be.colorScheme.Colorize("Edit Bulletin\n\n", "primary")))
@@ -241,8 +241,8 @@ func (be *BulletinEditor) editBulletin(term *term.Terminal) {
 	}
 }
 
-// deleteBulletin deletes a bulletin
-func (be *BulletinEditor) deleteBulletin(term *term.Terminal) {
+// DeleteBulletin deletes a bulletin
+func (be *BulletinEditor) DeleteBulletin(term *term.Terminal) {
 	term.Write([]byte(ClearScreen + ShowCursor))
 
 	term.Write([]byte(be.colorScheme.Colorize("Delete Bulletin\n\n", "primary")))

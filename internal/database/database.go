@@ -149,6 +149,68 @@ func (db *DB) UpdateUserLastCall(username string) error {
 	return err
 }
 
+// GetAllUsers retrieves all users (for sysop management)
+func (db *DB) GetAllUsers(limit int) ([]User, error) {
+	query := `SELECT id, username, password, real_name, email, access_level, 
+			  last_call, total_calls, created_at, is_active 
+			  FROM users ORDER BY username LIMIT ?`
+
+	rows, err := db.conn.Query(query, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var users []User
+	for rows.Next() {
+		var user User
+		err := rows.Scan(&user.ID, &user.Username, &user.Password, &user.RealName,
+			&user.Email, &user.AccessLevel, &user.LastCall, &user.TotalCalls,
+			&user.CreatedAt, &user.IsActive)
+		if err != nil {
+			return nil, err
+		}
+		users = append(users, user)
+	}
+
+	return users, nil
+}
+
+// GetUserByID retrieves a single user by ID
+func (db *DB) GetUserByID(id int) (*User, error) {
+	user := &User{}
+	query := `SELECT id, username, password, real_name, email, access_level, 
+			  last_call, total_calls, created_at, is_active 
+			  FROM users WHERE id = ?`
+
+	err := db.conn.QueryRow(query, id).Scan(
+		&user.ID, &user.Username, &user.Password, &user.RealName,
+		&user.Email, &user.AccessLevel, &user.LastCall, &user.TotalCalls,
+		&user.CreatedAt, &user.IsActive,
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return user, nil
+}
+
+// UpdateUser updates user information
+func (db *DB) UpdateUser(id int, username, password, realName, email string, accessLevel int, isActive bool) error {
+	query := `UPDATE users SET username = ?, password = ?, real_name = ?, 
+			  email = ?, access_level = ?, is_active = ? WHERE id = ?`
+	_, err := db.conn.Exec(query, username, password, realName, email, accessLevel, isActive, id)
+	return err
+}
+
+// DeleteUser deletes a user by ID
+func (db *DB) DeleteUser(id int) error {
+	query := `DELETE FROM users WHERE id = ?`
+	_, err := db.conn.Exec(query, id)
+	return err
+}
+
 // Message methods
 func (db *DB) GetMessages(toUser string, limit int) ([]Message, error) {
 	query := `SELECT id, from_user, to_user, subject, body, area, created_at, is_read

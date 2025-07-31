@@ -1,69 +1,165 @@
 server:
-  port: 2323
-  host_key_path: "host_key"
-  max_users: 100
+    port: 2323
+    host_key_path: "host_key"
+    max_users: 100
 
 database:
-  path: "bbs.db"
+    path: "bbs.db"
 
 bbs:
-  system_name: "Searchlight BBS"
-  sysop_name: "Sysop"
-  welcome_message: |
-    Welcome to Searchlight BBS!
-    
-    A classic bulletin board system experience over SSH.
-    Connect with other users, read messages, and explore!
-  max_line_length: 79
-  colors:
-    primary: "cyan"
-    secondary: "red"
-    accent: "yellow"
-    text: "white"
-    background: "black"
-    border: "blue"
-    success: "green"
-    error: "red"
-    highlight: "bright_white"
-  menus:
-    - id: "main"
-      title: "Main Menu"
-      description: "Main BBS Menu"
-      command: "main_menu"
-      access_level: 0
-      submenu:
-        - id: "bulletins"
-          title: "Bulletins"
-          description: "Read system bulletins"
-          command: "bulletins"
+    system_name: "Searchlight BBS"
+    sysop_name: "Sysop"
+    welcome_message: |
+        Welcome to Searchlight BBS!
+
+        A classic bulletin board system experience over SSH.
+        Connect with other users, read messages, and explore!
+    max_line_length: 79
+    colors:
+        primary: "cyan"
+        secondary: "red"
+        accent: "yellow"
+        text: "white"
+        background: "black"
+        border: "blue"
+        success: "green"
+        error: "red"
+        highlight: "bright_white"
+    menus:
+        - id: "main"
+          title: "Main Menu"
+          description: "Main BBS Menu"
+          command: "main_menu"
           access_level: 0
-        - id: "messages"
-          title: "Messages"
-          description: "Message areas"
-          command: "messages"
-          access_level: 0
-        - id: "files"
-          title: "Files"
-          description: "File areas"
-          command: "files"
-          access_level: 0
-        - id: "games"
-          title: "Games"
-          description: "Online games"
-          command: "games"
-          access_level: 0
-        - id: "users"
-          title: "Users"
-          description: "User listings"
-          command: "users"
-          access_level: 0
-        - id: "sysop"
-          title: "Sysop"
-          description: "System operator menu"
-          command: "sysop"
+          submenu:
+              - id: "bulletins"
+                title: "Bulletins"
+                description: "Read system bulletins"
+                command: "bulletins"
+                access_level: 0
+              - id: "messages"
+                title: "Messages"
+                description: "Message areas"
+                command: "messages"
+                access_level: 0
+              - id: "files"
+                title: "Files"
+                description: "File areas"
+                command: "files"
+                access_level: 0
+              - id: "games"
+                title: "Games"
+                description: "Online games"
+                command: "games"
+                access_level: 0
+              - id: "users"
+                title: "Users"
+                description: "User listings"
+                command: "users"
+                access_level: 0
+              - id: "sysop"
+                title: "Sysop"
+                description: "System operator menu"
+                command: "sysop_menu"
+                access_level: 255
+              - id: "goodbye"
+                title: "Goodbye"
+                description: "Logoff system"
+                command: "goodbye"
+                access_level: 0
+
+        - id: "sysop_menu"
+          title: "System Operator Menu"
+          description: "Sysop Management Menu"
+          command: "sysop_menu"
           access_level: 255
-        - id: "goodbye"
-          title: "Goodbye"
-          description: "Logoff system"
-          command: "goodbye"
-          access_level: 0
+          submenu:
+              - id: "user_management"
+                title: "User Management"
+                description: "Manage user accounts"
+                command: "sysop_user_menu"
+                access_level: 255
+              - id: "bulletin_management"
+                title: "Bulletin Management"
+                description: "Manage system bulletins"
+                command: "sysop_bulletin_menu"
+                access_level: 255
+              - id: "system_stats"
+                title: "System Statistics"
+                description: "View system statistics"
+                command: "sysop_stats"
+                access_level: 255
+              - id: "system_config"
+                title: "System Configuration"
+                description: "Configure system settings"
+                command: "sysop_config"
+                access_level: 255
+              - id: "database_maintenance"
+                title: "Database Maintenance"
+                description: "Database maintenance tools"
+                command: "sysop_maintenance"
+                access_level: 255
+
+        - id: "sysop_user_menu"
+          title: "Sysop User Editor"
+          description: "User Management Menu"
+          command: "sysop_user_menu"
+          access_level: 255
+          submenu:
+              - id: "list_users"
+                title: "List Users"
+                description: "List all users"
+                command: "sysop_user_list"
+                access_level: 255
+              - id: "create_user"
+                title: "Create User"
+                description: "Create new user"
+                command: "sysop_user_create"
+                access_level: 255
+              - id: "edit_user"
+                title: "Edit User"
+                description: "Edit existing user"
+                command: "sysop_user_edit"
+                access_level: 255
+              - id: "delete_user"
+                title: "Delete User"
+                description: "Delete user"
+                command: "sysop_user_delete"
+                access_level: 255
+              - id: "change_password"
+                title: "Change Password"
+                description: "Change user password"
+                command: "sysop_user_password"
+                access_level: 255
+              - id: "toggle_status"
+                title: "Toggle Status"
+                description: "Toggle user active status"
+                command: "sysop_user_toggle"
+                access_level: 255
+
+        - id: "sysop_bulletin_menu"
+          title: "Sysop Bulletin Editor"
+          description: "Bulletin Management Menu"
+          command: "sysop_bulletin_menu"
+          access_level: 255
+          submenu:
+              - id: "list_bulletins"
+                title: "List Bulletins"
+                description: "List all bulletins"
+                command: "sysop_bulletin_list"
+                access_level: 255
+              - id: "create_bulletin"
+                title: "Create Bulletin"
+                description: "Create new bulletin"
+                command: "sysop_bulletin_create"
+                access_level: 255
+              - id: "edit_bulletin"
+                title: "Edit Bulletin"
+                description: "Edit existing bulletin"
+                command: "sysop_bulletin_edit"
+                access_level: 255
+              - id: "delete_bulletin"
+                title: "Delete Bulletin"
+                description: "Delete bulletin"
+                command: "sysop_bulletin_delete"
+                access_level: 255

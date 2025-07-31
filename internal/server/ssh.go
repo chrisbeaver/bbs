@@ -10,6 +10,7 @@ import (
 
 	"bbs/internal/config"
 	"bbs/internal/database"
+	"bbs/internal/modules/sysop"
 )
 
 type SSHServer struct {
@@ -217,7 +218,7 @@ func (s *SSHServer) menuLoop(session *Session) {
 			if err != nil {
 				return
 			}
-			
+
 			// Debug: Show what key was pressed at main menu level
 			//session.term.Write([]byte(fmt.Sprintf("\nMAIN MENU DEBUG: Key pressed: '%s'\n", key)))
 
@@ -236,18 +237,18 @@ func (s *SSHServer) menuLoop(session *Session) {
 				}
 				s.displayMenu(session, currentMenu)
 
-		case "enter":
-			// Execute selected item
-			selectedItem := accessibleItems[session.selectedIndex]
-			if !s.executeCommand(session, &selectedItem) {
-				// Show cursor before exiting
-				session.term.Write([]byte(ShowCursor))
-				return
-			}
-			// Break out of navigation loop to redisplay menu
-			break NavigationLoop
+			case "enter":
+				// Execute selected item
+				selectedItem := accessibleItems[session.selectedIndex]
+				if !s.executeCommand(session, &selectedItem) {
+					// Show cursor before exiting
+					session.term.Write([]byte(ShowCursor))
+					return
+				}
+				// Break out of navigation loop to redisplay menu
+				break NavigationLoop
 
-		case "quit", "q", "Q":
+			case "quit", "q", "Q":
 				// Show cursor and exit
 				session.term.Write([]byte(ShowCursor))
 				goodbyeMsg := s.colorScheme.Colorize("\nThank you for calling! Goodbye!\n", "success")
@@ -413,7 +414,24 @@ func (s *SSHServer) processCommand(session *Session, menu *config.MenuItem, inpu
 	return true
 }
 
+// isMenuCommand checks if a command refers to a menu
+func (s *SSHServer) isMenuCommand(command string) bool {
+	for _, menu := range s.config.BBS.Menus {
+		if menu.ID == command {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *SSHServer) executeCommand(session *Session, item *config.MenuItem) bool {
+	// First check if this command refers to a menu
+	if s.isMenuCommand(item.Command) {
+		session.currentMenu = item.Command
+		return true
+	}
+
+	// Otherwise execute as a command
 	switch item.Command {
 	case "bulletins":
 		return s.executeBulletinsModule(session)
@@ -431,10 +449,38 @@ func (s *SSHServer) executeCommand(session *Session, item *config.MenuItem) bool
 		msg := s.colorScheme.Colorize("User listings not yet implemented.", "secondary")
 		session.term.Write([]byte(msg + "\n"))
 		return true
-	case "sysop":
-		msg := s.colorScheme.Colorize("Sysop menu not yet implemented.", "secondary")
+	case "sysop_stats":
+		return s.executeSysopStats(session)
+	case "sysop_config":
+		msg := s.colorScheme.Colorize("System configuration not yet implemented.", "secondary")
 		session.term.Write([]byte(msg + "\n"))
 		return true
+	case "sysop_maintenance":
+		msg := s.colorScheme.Colorize("Database maintenance not yet implemented.", "secondary")
+		session.term.Write([]byte(msg + "\n"))
+		return true
+	// Sysop User Management Commands
+	case "sysop_user_list":
+		return s.executeSysopUserList(session)
+	case "sysop_user_create":
+		return s.executeSysopUserCreate(session)
+	case "sysop_user_edit":
+		return s.executeSysopUserEdit(session)
+	case "sysop_user_delete":
+		return s.executeSysopUserDelete(session)
+	case "sysop_user_password":
+		return s.executeSysopUserPassword(session)
+	case "sysop_user_toggle":
+		return s.executeSysopUserToggle(session)
+	// Sysop Bulletin Management Commands
+	case "sysop_bulletin_list":
+		return s.executeSysopBulletinList(session)
+	case "sysop_bulletin_create":
+		return s.executeSysopBulletinCreate(session)
+	case "sysop_bulletin_edit":
+		return s.executeSysopBulletinEdit(session)
+	case "sysop_bulletin_delete":
+		return s.executeSysopBulletinDelete(session)
 	case "goodbye":
 		goodbyeMsg := s.colorScheme.Colorize("\nThank you for calling! Goodbye!\n", "success")
 		session.term.Write([]byte(goodbyeMsg))
@@ -485,6 +531,192 @@ func (s *SSHServer) executeBulletinsModule(session *Session) bool {
 
 	// Show navigable bulletin list using the same key handling as menus
 	return s.showNavigableBulletinList(session, bulletins)
+}
+
+// Helper function to check sysop access
+func (s *SSHServer) checkSysopAccess(session *Session) bool {
+	if session.user == nil || session.user.AccessLevel < 255 {
+		errorMsg := s.colorScheme.Colorize("Access denied. Sysop access required.", "error")
+		centeredError := s.colorScheme.CenterText(errorMsg, 79)
+		session.term.Write([]byte(centeredError + "\n"))
+		session.term.ReadLine() // Wait for key
+		return false
+	}
+	return true
+}
+
+// Sysop Statistics
+func (s *SSHServer) executeSysopStats(session *Session) bool {
+	if !s.checkSysopAccess(session) {
+		return true
+	}
+
+	session.term.Write([]byte(ClearScreen))
+
+	header := s.colorScheme.Colorize("System Statistics", "primary")
+	centeredHeader := s.colorScheme.CenterText(header, 79)
+	session.term.Write([]byte(centeredHeader + "\n"))
+
+	separator := s.colorScheme.DrawSeparator(len("System Statistics"), "═")
+	centeredSeparator := s.colorScheme.CenterText(separator, 79)
+	session.term.Write([]byte(centeredSeparator + "\n\n"))
+
+	// Get users count
+	users, err := s.db.GetAllUsers(1000)
+	if err != nil {
+		s.showSysopMessage(session, "Error retrieving user statistics: "+err.Error(), "error")
+		return true
+	}
+
+	// Get bulletins count
+	bulletins, err := s.db.GetBulletins(1000)
+	if err != nil {
+		s.showSysopMessage(session, "Error retrieving bulletin statistics: "+err.Error(), "error")
+		return true
+	}
+
+	// Count active users
+	activeUsers := 0
+	totalCalls := 0
+	for _, user := range users {
+		if user.IsActive {
+			activeUsers++
+		}
+		totalCalls += user.TotalCalls
+	}
+
+	// Display statistics
+	stats := []string{
+		fmt.Sprintf("Total Users: %d", len(users)),
+		fmt.Sprintf("Active Users: %d", activeUsers),
+		fmt.Sprintf("Inactive Users: %d", len(users)-activeUsers),
+		fmt.Sprintf("Total Bulletins: %d", len(bulletins)),
+		fmt.Sprintf("Total System Calls: %d", totalCalls),
+	}
+
+	for _, stat := range stats {
+		coloredStat := s.colorScheme.Colorize(stat, "text")
+		centeredStat := s.colorScheme.CenterText(coloredStat, 79)
+		session.term.Write([]byte(centeredStat + "\n"))
+	}
+
+	s.showSysopMessage(session, "\nPress any key to continue...", "text")
+	return true
+}
+
+// Sysop User Management Commands
+func (s *SSHServer) executeSysopUserList(session *Session) bool {
+	if !s.checkSysopAccess(session) {
+		return true
+	}
+
+	userEditor := sysop.NewUserEditor(s.db, s.colorScheme)
+	userEditor.ListUsers(session.term)
+	return true
+}
+
+func (s *SSHServer) executeSysopUserCreate(session *Session) bool {
+	if !s.checkSysopAccess(session) {
+		return true
+	}
+
+	userEditor := sysop.NewUserEditor(s.db, s.colorScheme)
+	userEditor.CreateUser(session.term)
+	return true
+}
+
+func (s *SSHServer) executeSysopUserEdit(session *Session) bool {
+	if !s.checkSysopAccess(session) {
+		return true
+	}
+
+	userEditor := sysop.NewUserEditor(s.db, s.colorScheme)
+	userEditor.EditUser(session.term)
+	return true
+}
+
+func (s *SSHServer) executeSysopUserDelete(session *Session) bool {
+	if !s.checkSysopAccess(session) {
+		return true
+	}
+
+	userEditor := sysop.NewUserEditor(s.db, s.colorScheme)
+	userEditor.DeleteUser(session.term)
+	return true
+}
+
+func (s *SSHServer) executeSysopUserPassword(session *Session) bool {
+	if !s.checkSysopAccess(session) {
+		return true
+	}
+
+	userEditor := sysop.NewUserEditor(s.db, s.colorScheme)
+	userEditor.ChangePassword(session.term)
+	return true
+}
+
+func (s *SSHServer) executeSysopUserToggle(session *Session) bool {
+	if !s.checkSysopAccess(session) {
+		return true
+	}
+
+	userEditor := sysop.NewUserEditor(s.db, s.colorScheme)
+	userEditor.ToggleUserStatus(session.term)
+	return true
+}
+
+// Sysop Bulletin Management Commands
+func (s *SSHServer) executeSysopBulletinList(session *Session) bool {
+	if !s.checkSysopAccess(session) {
+		return true
+	}
+
+	bulletinEditor := sysop.NewBulletinEditor(s.db, s.colorScheme)
+	bulletinEditor.ListBulletins(session.term)
+	return true
+}
+
+func (s *SSHServer) executeSysopBulletinCreate(session *Session) bool {
+	if !s.checkSysopAccess(session) {
+		return true
+	}
+
+	bulletinEditor := sysop.NewBulletinEditor(s.db, s.colorScheme)
+	bulletinEditor.CreateBulletin(session.term)
+	return true
+}
+
+func (s *SSHServer) executeSysopBulletinEdit(session *Session) bool {
+	if !s.checkSysopAccess(session) {
+		return true
+	}
+
+	bulletinEditor := sysop.NewBulletinEditor(s.db, s.colorScheme)
+	bulletinEditor.EditBulletin(session.term)
+	return true
+}
+
+func (s *SSHServer) executeSysopBulletinDelete(session *Session) bool {
+	if !s.checkSysopAccess(session) {
+		return true
+	}
+
+	bulletinEditor := sysop.NewBulletinEditor(s.db, s.colorScheme)
+	bulletinEditor.DeleteBulletin(session.term)
+	return true
+}
+
+// Helper method for sysop messages
+func (s *SSHServer) showSysopMessage(session *Session, message, colorType string) {
+	session.term.Write([]byte(HideCursor))
+
+	coloredMsg := s.colorScheme.Colorize(message, colorType)
+	centeredMsg := s.colorScheme.CenterText(coloredMsg, 79)
+	session.term.Write([]byte("\n" + centeredMsg))
+
+	session.term.Write([]byte(ShowCursor))
+	session.term.ReadLine()
+	session.term.Write([]byte(HideCursor))
 }
 
 // showNavigableBulletinList displays a navigable list of bulletins
