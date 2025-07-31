@@ -10,6 +10,7 @@ import (
 
 	"bbs/internal/config"
 	"bbs/internal/database"
+	"bbs/internal/modules/bulletins"
 	"bbs/internal/modules/sysop"
 )
 
@@ -20,7 +21,7 @@ type SSHServer struct {
 	colorScheme *ColorScheme
 }
 
-type Session struct {
+type SSHSession struct {
 	conn          ssh.Conn
 	channel       ssh.Channel
 	term          *term.Terminal
@@ -105,7 +106,7 @@ func (s *SSHServer) HandleConnection(netConn net.Conn) {
 		}
 
 		// Create session
-		session := &Session{
+		session := &SSHSession{
 			conn:          sshConn,
 			channel:       channel,
 			currentMenu:   "main",
@@ -126,7 +127,7 @@ func (s *SSHServer) HandleConnection(netConn net.Conn) {
 	}
 }
 
-func (s *SSHServer) handleSession(session *Session, channel ssh.Channel, requests <-chan *ssh.Request) {
+func (s *SSHServer) handleSession(session *SSHSession, channel ssh.Channel, requests <-chan *ssh.Request) {
 	defer channel.Close()
 
 	// Handle session requests
@@ -160,7 +161,7 @@ func (s *SSHServer) handleSession(session *Session, channel ssh.Channel, request
 	s.menuLoop(session)
 }
 
-func (s *SSHServer) displayWelcome(session *Session) {
+func (s *SSHServer) displayWelcome(session *SSHSession) {
 	// Create colorized welcome banner
 	banner := s.colorScheme.CreateWelcomeBanner(s.config.BBS.SystemName, s.config.BBS.WelcomeMsg)
 	session.term.Write([]byte(banner))
@@ -180,7 +181,7 @@ func (s *SSHServer) displayWelcome(session *Session) {
 	}
 }
 
-func (s *SSHServer) menuLoop(session *Session) {
+func (s *SSHServer) menuLoop(session *SSHSession) {
 	for {
 		// Find current menu
 		var currentMenu *config.MenuItem
@@ -285,7 +286,7 @@ func (s *SSHServer) menuLoop(session *Session) {
 	}
 }
 
-func (s *SSHServer) displayMenu(session *Session, menu *config.MenuItem) {
+func (s *SSHServer) displayMenu(session *SSHSession, menu *config.MenuItem) {
 	// Clear screen and hide cursor
 	session.term.Write([]byte(ClearScreen + HideCursor))
 
@@ -380,7 +381,7 @@ func (s *SSHServer) displayMenu(session *Session, menu *config.MenuItem) {
 }
 
 // readKey reads a single key press, handling special keys like arrows
-func (s *SSHServer) readKey(session *Session) (string, error) {
+func (s *SSHServer) readKey(session *SSHSession) (string, error) {
 	buf := make([]byte, 3)
 	n, err := session.channel.Read(buf)
 	if err != nil {
@@ -420,7 +421,7 @@ func (s *SSHServer) readKey(session *Session) (string, error) {
 	return string(buf[:n]), nil
 }
 
-func (s *SSHServer) processCommand(session *Session, menu *config.MenuItem, input string) bool {
+func (s *SSHServer) processCommand(session *SSHSession, menu *config.MenuItem, input string) bool {
 	if input == "quit" || input == "q" || input == "goodbye" {
 		goodbyeMsg := s.colorScheme.Colorize("\nThank you for calling! Goodbye!\n", "success")
 		session.term.Write([]byte(goodbyeMsg))
@@ -459,7 +460,7 @@ func (s *SSHServer) isMenuCommand(command string) bool {
 	return false
 }
 
-func (s *SSHServer) executeCommand(session *Session, item *config.MenuItem) bool {
+func (s *SSHServer) executeCommand(session *SSHSession, item *config.MenuItem) bool {
 	// First check if this command refers to a menu
 	if s.isMenuCommand(item.Command) {
 		// Add current menu to history before navigating
@@ -471,7 +472,11 @@ func (s *SSHServer) executeCommand(session *Session, item *config.MenuItem) bool
 	// Otherwise execute as a command
 	switch item.Command {
 	case "bulletins":
-		return s.executeBulletinsModule(session)
+		bulletinsModule := bulletins.NewModule(s.db, s.colorScheme)
+		writer := &SSHWriter{term: session.term}
+		keyReader := &SSHKeyReader{server: s, session: session}
+		bulletinsModule.Execute(writer, keyReader)
+		return true
 	case "messages":
 		return s.showMessages(session)
 	case "files":
@@ -529,49 +534,27 @@ func (s *SSHServer) executeCommand(session *Session, item *config.MenuItem) bool
 	}
 }
 
-// executeBulletinsModule creates and runs the bulletins module with proper key handling
-func (s *SSHServer) executeBulletinsModule(session *Session) bool {
-	// Get bulletins from database
-	bulletins, err := s.db.GetBulletins(50)
-	if err != nil {
-		errorMsg := s.colorScheme.Colorize("Error retrieving bulletins.", "error")
-		centeredError := s.colorScheme.CenterText(errorMsg, 79)
-		session.term.Write([]byte(centeredError + "\n"))
-		session.term.ReadLine() // Wait for key
-		return true
-	}
+// SSHWriter implements the Writer interface for SSH sessions
+type SSHWriter struct {
+	term *term.Terminal
+}
 
-	if len(bulletins) == 0 {
-		// Clear screen and show no bulletins message
-		session.term.Write([]byte(ClearScreen + HideCursor))
+func (w *SSHWriter) Write(data []byte) (int, error) {
+	return w.term.Write(data)
+}
 
-		header := s.colorScheme.Colorize("System Bulletins", "primary")
-		centeredHeader := s.colorScheme.CenterText(header, 79)
-		session.term.Write([]byte(centeredHeader + "\n"))
+// SSHKeyReader implements the KeyReader interface for SSH sessions
+type SSHKeyReader struct {
+	server  *SSHServer
+	session *SSHSession
+}
 
-		separator := s.colorScheme.DrawSeparator(len("System Bulletins"), "═")
-		centeredSeparator := s.colorScheme.CenterText(separator, 79)
-		session.term.Write([]byte(centeredSeparator + "\n\n"))
-
-		noMsg := s.colorScheme.Colorize("No bulletins available.", "secondary")
-		centeredNoMsg := s.colorScheme.CenterText(noMsg, 79)
-		session.term.Write([]byte(centeredNoMsg + "\n\n"))
-
-		prompt := s.colorScheme.Colorize("Press any key to continue...", "text")
-		centeredPrompt := s.colorScheme.CenterText(prompt, 79)
-		session.term.Write([]byte(centeredPrompt))
-
-		session.term.ReadLine()
-		session.term.Write([]byte(ShowCursor))
-		return true
-	}
-
-	// Show navigable bulletin list using the same key handling as menus
-	return s.showNavigableBulletinList(session, bulletins)
+func (s *SSHKeyReader) ReadKey() (string, error) {
+	return s.server.readKey(s.session)
 }
 
 // Helper function to check sysop access
-func (s *SSHServer) checkSysopAccess(session *Session) bool {
+func (s *SSHServer) checkSysopAccess(session *SSHSession) bool {
 	if session.user == nil || session.user.AccessLevel < 255 {
 		errorMsg := s.colorScheme.Colorize("Access denied. Sysop access required.", "error")
 		centeredError := s.colorScheme.CenterText(errorMsg, 79)
@@ -583,7 +566,7 @@ func (s *SSHServer) checkSysopAccess(session *Session) bool {
 }
 
 // Sysop Statistics
-func (s *SSHServer) executeSysopStats(session *Session) bool {
+func (s *SSHServer) executeSysopStats(session *SSHSession) bool {
 	if !s.checkSysopAccess(session) {
 		return true
 	}
@@ -642,7 +625,7 @@ func (s *SSHServer) executeSysopStats(session *Session) bool {
 }
 
 // Sysop User Management Commands
-func (s *SSHServer) executeSysopUserList(session *Session) bool {
+func (s *SSHServer) executeSysopUserList(session *SSHSession) bool {
 	if !s.checkSysopAccess(session) {
 		return true
 	}
@@ -652,7 +635,7 @@ func (s *SSHServer) executeSysopUserList(session *Session) bool {
 	return true
 }
 
-func (s *SSHServer) executeSysopUserCreate(session *Session) bool {
+func (s *SSHServer) executeSysopUserCreate(session *SSHSession) bool {
 	if !s.checkSysopAccess(session) {
 		return true
 	}
@@ -662,7 +645,7 @@ func (s *SSHServer) executeSysopUserCreate(session *Session) bool {
 	return true
 }
 
-func (s *SSHServer) executeSysopUserEdit(session *Session) bool {
+func (s *SSHServer) executeSysopUserEdit(session *SSHSession) bool {
 	if !s.checkSysopAccess(session) {
 		return true
 	}
@@ -672,7 +655,7 @@ func (s *SSHServer) executeSysopUserEdit(session *Session) bool {
 	return true
 }
 
-func (s *SSHServer) executeSysopUserDelete(session *Session) bool {
+func (s *SSHServer) executeSysopUserDelete(session *SSHSession) bool {
 	if !s.checkSysopAccess(session) {
 		return true
 	}
@@ -682,7 +665,7 @@ func (s *SSHServer) executeSysopUserDelete(session *Session) bool {
 	return true
 }
 
-func (s *SSHServer) executeSysopUserPassword(session *Session) bool {
+func (s *SSHServer) executeSysopUserPassword(session *SSHSession) bool {
 	if !s.checkSysopAccess(session) {
 		return true
 	}
@@ -692,7 +675,7 @@ func (s *SSHServer) executeSysopUserPassword(session *Session) bool {
 	return true
 }
 
-func (s *SSHServer) executeSysopUserToggle(session *Session) bool {
+func (s *SSHServer) executeSysopUserToggle(session *SSHSession) bool {
 	if !s.checkSysopAccess(session) {
 		return true
 	}
@@ -703,7 +686,7 @@ func (s *SSHServer) executeSysopUserToggle(session *Session) bool {
 }
 
 // Sysop Bulletin Management Commands
-func (s *SSHServer) executeSysopBulletinList(session *Session) bool {
+func (s *SSHServer) executeSysopBulletinList(session *SSHSession) bool {
 	if !s.checkSysopAccess(session) {
 		return true
 	}
@@ -713,7 +696,7 @@ func (s *SSHServer) executeSysopBulletinList(session *Session) bool {
 	return true
 }
 
-func (s *SSHServer) executeSysopBulletinCreate(session *Session) bool {
+func (s *SSHServer) executeSysopBulletinCreate(session *SSHSession) bool {
 	if !s.checkSysopAccess(session) {
 		return true
 	}
@@ -723,7 +706,7 @@ func (s *SSHServer) executeSysopBulletinCreate(session *Session) bool {
 	return true
 }
 
-func (s *SSHServer) executeSysopBulletinEdit(session *Session) bool {
+func (s *SSHServer) executeSysopBulletinEdit(session *SSHSession) bool {
 	if !s.checkSysopAccess(session) {
 		return true
 	}
@@ -733,7 +716,7 @@ func (s *SSHServer) executeSysopBulletinEdit(session *Session) bool {
 	return true
 }
 
-func (s *SSHServer) executeSysopBulletinDelete(session *Session) bool {
+func (s *SSHServer) executeSysopBulletinDelete(session *SSHSession) bool {
 	if !s.checkSysopAccess(session) {
 		return true
 	}
@@ -744,7 +727,7 @@ func (s *SSHServer) executeSysopBulletinDelete(session *Session) bool {
 }
 
 // Helper method for sysop messages
-func (s *SSHServer) showSysopMessage(session *Session, message, colorType string) {
+func (s *SSHServer) showSysopMessage(session *SSHSession, message, colorType string) {
 	session.term.Write([]byte(HideCursor))
 
 	coloredMsg := s.colorScheme.Colorize(message, colorType)
@@ -756,195 +739,7 @@ func (s *SSHServer) showSysopMessage(session *Session, message, colorType string
 	session.term.Write([]byte(HideCursor))
 }
 
-// showNavigableBulletinList displays a navigable list of bulletins
-func (s *SSHServer) showNavigableBulletinList(session *Session, bulletins []database.Bulletin) bool {
-	selectedIndex := 0
-
-	for {
-		// Clear screen and hide cursor
-		session.term.Write([]byte(ClearScreen + HideCursor))
-
-		// Display header
-		header := s.colorScheme.Colorize("System Bulletins", "primary")
-		centeredHeader := s.colorScheme.CenterText(header, 79)
-		session.term.Write([]byte(centeredHeader + "\n"))
-
-		separator := s.colorScheme.DrawSeparator(len("System Bulletins"), "═")
-		centeredSeparator := s.colorScheme.CenterText(separator, 79)
-		session.term.Write([]byte(centeredSeparator + "\n\n"))
-
-		// Calculate display area
-		terminalWidth := 79
-		contentWidth := 70
-		centerOffset := (terminalWidth - contentWidth) / 2
-		centerPadding := strings.Repeat(" ", centerOffset)
-
-		// Display bulletin list with navigation
-		for i, bulletin := range bulletins {
-			isSelected := (i == selectedIndex)
-
-			// Format bulletin line
-			number := fmt.Sprintf("%2d)", i+1)
-			title := bulletin.Title
-			author := fmt.Sprintf("by %s", bulletin.Author)
-			date := bulletin.CreatedAt.Format("2006-01-02")
-
-			// Truncate title if too long
-			maxTitleLength := contentWidth - len(number) - len(author) - len(date) - 6 // spaces and parentheses
-			if len(title) > maxTitleLength {
-				title = title[:maxTitleLength-3] + "..."
-			}
-
-			bulletinLine := fmt.Sprintf("%s %s (%s, %s)", number, title, author, date)
-
-			// Pad to content width
-			if len(bulletinLine) < contentWidth {
-				bulletinLine += strings.Repeat(" ", contentWidth-len(bulletinLine))
-			}
-
-			if isSelected {
-				// Highlight selected item
-				coloredLine := s.colorScheme.ColorizeWithBg(bulletinLine, "highlight", "primary")
-				session.term.Write([]byte(centerPadding + coloredLine + "\n"))
-			} else {
-				// Normal item
-				numberColored := s.colorScheme.Colorize(number, "accent")
-				titleColored := s.colorScheme.Colorize(title, "text")
-				authorColored := s.colorScheme.Colorize(fmt.Sprintf("(%s, %s)", author, date), "secondary")
-
-				normalLine := fmt.Sprintf("%s %s %s", numberColored, titleColored, authorColored)
-				// Pad the line to maintain consistent spacing
-				paddedLine := normalLine + strings.Repeat(" ", contentWidth-len(fmt.Sprintf("%s %s (%s, %s)", number, title, author, date)))
-				session.term.Write([]byte(centerPadding + paddedLine + "\n"))
-			}
-		}
-
-		// Instructions
-		instructions := s.colorScheme.Colorize("\nUse ", "text") +
-			s.colorScheme.Colorize("↑↓", "accent") +
-			s.colorScheme.Colorize(" to navigate, ", "text") +
-			s.colorScheme.Colorize("Enter", "accent") +
-			s.colorScheme.Colorize(" to read, ", "text") +
-			s.colorScheme.Colorize("Q", "accent") +
-			s.colorScheme.Colorize(" to return", "text")
-
-		centeredInstructions := s.colorScheme.CenterText(instructions, 79)
-		session.term.Write([]byte("\n" + centeredInstructions))
-
-		// Handle input using the same key reading as menus
-		key, err := s.readKey(session)
-		if err != nil {
-			session.term.Write([]byte(ShowCursor))
-			return true
-		}
-
-		switch key {
-		case "up":
-			selectedIndex--
-			if selectedIndex < 0 {
-				selectedIndex = len(bulletins) - 1
-			}
-		case "down":
-			selectedIndex++
-			if selectedIndex >= len(bulletins) {
-				selectedIndex = 0
-			}
-		case "enter":
-			// Show selected bulletin
-			if selectedIndex >= 0 && selectedIndex < len(bulletins) {
-				s.showSingleBulletin(session, &bulletins[selectedIndex])
-			}
-		case "quit", "q", "Q":
-			session.term.Write([]byte(ShowCursor))
-			return true
-		}
-	}
-}
-
-// showSingleBulletin displays a single bulletin
-func (s *SSHServer) showSingleBulletin(session *Session, bulletin *database.Bulletin) {
-	// Clear screen
-	session.term.Write([]byte(ClearScreen + HideCursor))
-
-	terminalWidth := 79
-	contentWidth := 70
-	centerOffset := (terminalWidth - contentWidth) / 2
-	centerPadding := strings.Repeat(" ", centerOffset)
-
-	// Header with bulletin title
-	title := s.colorScheme.Colorize(bulletin.Title, "primary")
-	centeredTitle := s.colorScheme.CenterText(title, terminalWidth)
-	session.term.Write([]byte(centeredTitle + "\n"))
-
-	// Separator
-	separator := s.colorScheme.DrawSeparator(len(bulletin.Title), "═")
-	centeredSeparator := s.colorScheme.CenterText(separator, terminalWidth)
-	session.term.Write([]byte(centeredSeparator + "\n\n"))
-
-	// Metadata
-	author := s.colorScheme.Colorize(fmt.Sprintf("Author: %s", bulletin.Author), "accent")
-	date := s.colorScheme.Colorize(fmt.Sprintf("Date: %s", bulletin.CreatedAt.Format("2006-01-02 15:04:05")), "secondary")
-
-	session.term.Write([]byte(centerPadding + author + "\n"))
-	session.term.Write([]byte(centerPadding + date + "\n\n"))
-
-	// Bulletin body - word wrap to content width
-	body := bulletin.Body
-	lines := s.wrapText(body, contentWidth)
-
-	for _, line := range lines {
-		coloredLine := s.colorScheme.Colorize(line, "text")
-		session.term.Write([]byte(centerPadding + coloredLine + "\n"))
-	}
-
-	// Footer prompt
-	prompt := s.colorScheme.Colorize("\nPress any key to return to bulletin list...", "text")
-	centeredPrompt := s.colorScheme.CenterText(prompt, terminalWidth)
-	session.term.Write([]byte(centeredPrompt))
-
-	// Wait for key press
-	session.term.ReadLine()
-	session.term.Write([]byte(ShowCursor))
-}
-
-// wrapText wraps text to specified width
-func (s *SSHServer) wrapText(text string, width int) []string {
-	var lines []string
-	words := strings.Fields(text)
-
-	if len(words) == 0 {
-		return lines
-	}
-
-	currentLine := ""
-	for _, word := range words {
-		// Check if adding this word would exceed the width
-		testLine := currentLine
-		if testLine != "" {
-			testLine += " "
-		}
-		testLine += word
-
-		if len(testLine) <= width {
-			currentLine = testLine
-		} else {
-			// Start a new line
-			if currentLine != "" {
-				lines = append(lines, currentLine)
-			}
-			currentLine = word
-		}
-	}
-
-	// Add the last line
-	if currentLine != "" {
-		lines = append(lines, currentLine)
-	}
-
-	return lines
-}
-
-func (s *SSHServer) showBulletins(session *Session) bool {
+func (s *SSHServer) showBulletins(session *SSHSession) bool {
 	bulletins, err := s.db.GetBulletins(10)
 	if err != nil {
 		errorMsg := s.colorScheme.Colorize("Error retrieving bulletins.", "error")
@@ -987,7 +782,7 @@ func (s *SSHServer) showBulletins(session *Session) bool {
 	return true
 }
 
-func (s *SSHServer) showMessages(session *Session) bool {
+func (s *SSHServer) showMessages(session *SSHSession) bool {
 	if session.user == nil {
 		errorMsg := s.colorScheme.Colorize("You must be logged in to read messages.", "error")
 		centeredError := s.colorScheme.CenterText(errorMsg, 79)

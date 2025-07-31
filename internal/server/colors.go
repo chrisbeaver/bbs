@@ -211,6 +211,11 @@ func (cs *ColorScheme) stripAnsiCodes(text string) string {
 	return result
 }
 
+// StripAnsiCodes removes ANSI escape codes from text (public version for interface compatibility)
+func (cs *ColorScheme) StripAnsiCodes(text string) string {
+	return cs.stripAnsiCodes(text)
+}
+
 // Center container but left-align content within it
 func (cs *ColorScheme) CenterContainerLeftAlign(text string, containerWidth, terminalWidth int) string {
 	// Calculate padding to center the container
