@@ -2,10 +2,10 @@ package server
 
 import (
 	"fmt"
-	"strings"
 
 	"bbs/internal/config"
 	"bbs/internal/database"
+	"bbs/internal/menu"
 	"bbs/internal/modules/bulletins"
 	"bbs/internal/terminal"
 )
@@ -23,6 +23,7 @@ type Session struct {
 	authenticated     bool
 	colorScheme       *ColorScheme
 	prefilledUsername string // For SSH connections where username is already known
+	menuRenderer      *menu.MenuRenderer
 }
 
 // Run is the unified entry point for all sessions (SSH and local)
@@ -250,7 +251,7 @@ func (s *Session) menuLoop() {
 				selectedItem := accessibleItems[s.selectedIndex]
 				if !s.executeCommand(&selectedItem) {
 					// Show cursor before exiting
-					s.write([]byte(ShowCursor))
+					s.write([]byte(menu.ShowCursor))
 					return
 				}
 				// Break out of navigation loop to redisplay menu
@@ -279,7 +280,7 @@ func (s *Session) menuLoop() {
 
 			case "goodbye", "g", "G":
 				// Handle G key - goodbye from any menu
-				s.write([]byte(ShowCursor))
+				s.write([]byte(menu.ShowCursor))
 				goodbyeMsg := s.colorScheme.Colorize("\nThank you for calling! Goodbye!\n", "success")
 				s.write([]byte(goodbyeMsg))
 				return
@@ -294,97 +295,14 @@ func (s *Session) menuLoop() {
 
 // displayMenu displays the current menu - unified for both SSH and local
 func (s *Session) displayMenu(menu *config.MenuItem) {
-	// Clear screen and hide cursor
-	s.write([]byte(ClearScreen + HideCursor))
-
-	// Terminal width for centering
-	terminalWidth := 79
-
-	// Menu title with color and centering
-	title := s.colorScheme.Colorize(menu.Title, "primary")
-	centeredTitle := s.colorScheme.CenterText(title, terminalWidth)
-	s.write([]byte(fmt.Sprintf("%s\n", centeredTitle)))
-
-	// Decorative separator (centered to match title width)
-	// Calculate the actual title length (without ANSI codes) for proper separator width
-	cleanTitle := s.colorScheme.StripAnsiCodes(title)
-	separator := s.colorScheme.DrawSeparator(len(cleanTitle), "═")
-	centeredSeparator := s.colorScheme.CenterText(separator, terminalWidth)
-	s.write([]byte(centeredSeparator + "\n\n"))
-
-	// Build accessible menu items (filter by access level)
-	var accessibleItems []config.MenuItem
-	for _, item := range menu.Submenu {
-		if s.user == nil || item.AccessLevel <= s.user.AccessLevel {
-			accessibleItems = append(accessibleItems, item)
-		}
+	// Get user access level (default to 0 if not authenticated)
+	userAccessLevel := 0
+	if s.user != nil {
+		userAccessLevel = s.user.AccessLevel
 	}
 
-	// Calculate maximum width needed for highlight bar
-	maxWidth := 0
-	for _, item := range accessibleItems {
-		if len(item.Description) > maxWidth {
-			maxWidth = len(item.Description)
-		}
-	}
-	// Add some padding
-	maxWidth += 4
-
-	// Calculate centering offset for menu items
-	centerOffset := (terminalWidth - maxWidth) / 2
-	if centerOffset < 0 {
-		centerOffset = 0
-	}
-
-	// Create decorative border pattern
-	borderPattern := s.colorScheme.CreateBorderPattern(maxWidth, "-=")
-	centerPadding := strings.Repeat(" ", centerOffset)
-
-	// Top border
-	s.write([]byte(centerPadding + borderPattern + "\n"))
-
-	// Ensure selected index is valid
-	if s.selectedIndex >= len(accessibleItems) {
-		s.selectedIndex = 0
-	}
-	if s.selectedIndex < 0 {
-		s.selectedIndex = len(accessibleItems) - 1
-	}
-
-	// Display menu items with highlighting and centering
-	for i, item := range accessibleItems {
-		selected := (i == s.selectedIndex)
-		menuLine := s.colorScheme.HighlightSelection(item.Description, selected, maxWidth)
-		s.write([]byte(centerPadding + menuLine + "\n"))
-	}
-
-	// Bottom border
-	s.write([]byte(centerPadding + borderPattern + "\n"))
-
-	// Instructions (centered) - different for main menu vs submenus
-	var instructions string
-	if s.currentMenu == "main" {
-		instructions = s.colorScheme.Colorize("Use ", "text") +
-			s.colorScheme.Colorize("↑↓", "accent") +
-			s.colorScheme.Colorize(" arrow keys to navigate, ", "text") +
-			s.colorScheme.Colorize("Enter", "accent") +
-			s.colorScheme.Colorize(" to select, ", "text") +
-			s.colorScheme.Colorize("G", "accent") +
-			s.colorScheme.Colorize(" for goodbye", "text")
-	} else {
-		instructions = s.colorScheme.Colorize("Use ", "text") +
-			s.colorScheme.Colorize("↑↓", "accent") +
-			s.colorScheme.Colorize(" arrow keys to navigate, ", "text") +
-			s.colorScheme.Colorize("Enter", "accent") +
-			s.colorScheme.Colorize(" to select, ", "text") +
-			s.colorScheme.Colorize("Q", "accent") +
-			s.colorScheme.Colorize(" to return, ", "text") +
-			s.colorScheme.Colorize("G", "accent") +
-			s.colorScheme.Colorize(" for goodbye", "text")
-	}
-
-	centeredInstructions := s.colorScheme.CenterText(instructions, terminalWidth)
-	s.write([]byte("\n" + centeredInstructions))
+	// Use unified menu renderer with access level filtering
+	s.menuRenderer.RenderConfigMenu(menu, s.selectedIndex, userAccessLevel)
 }
 
 // readKey reads a single key press - unified for both SSH and local
@@ -456,43 +374,57 @@ func (s *Session) readKeyLocal() (string, error) {
 
 // readKeySSH handles key reading for SSH terminal
 func (s *Session) readKeySSH() (string, error) {
-	buf := make([]byte, 3)
+	buf := make([]byte, 1)
 	n, err := s.terminal.Read(buf)
 	if err != nil {
 		return "", err
 	}
 
-	switch n {
-	case 1:
-		// Single character
-		char := string(buf[0])
-		switch buf[0] {
-		case 13: // Enter
-			return "enter", nil
-		case 27: // Escape (might be start of arrow key sequence)
+	if n == 0 {
+		return "", nil
+	}
+
+	// Handle single character
+	switch buf[0] {
+	case 13, 10: // Enter or newline
+		return "enter", nil
+	case 27: // Escape - check for arrow key sequence
+		// Read next character to see if it's an arrow key
+		buf2 := make([]byte, 1)
+		n2, err := s.terminal.Read(buf2)
+		if err != nil || n2 == 0 {
 			return "escape", nil
-		case 'q', 'Q':
-			return "quit", nil
-		default:
-			return char, nil
 		}
-	case 3:
-		// Arrow key sequence: ESC [ A/B/C/D
-		if buf[0] == 27 && buf[1] == 91 {
-			switch buf[2] {
-			case 65: // Up arrow
+
+		if buf2[0] == 91 { // '['
+			// Read the final character of the arrow key sequence
+			buf3 := make([]byte, 1)
+			n3, err := s.terminal.Read(buf3)
+			if err != nil || n3 == 0 {
+				return "escape", nil
+			}
+
+			switch buf3[0] {
+			case 65: // 'A' - Up arrow
 				return "up", nil
-			case 66: // Down arrow
+			case 66: // 'B' - Down arrow
 				return "down", nil
-			case 67: // Right arrow
+			case 67: // 'C' - Right arrow
 				return "right", nil
-			case 68: // Left arrow
+			case 68: // 'D' - Left arrow
 				return "left", nil
 			}
 		}
+		return "escape", nil
+	case 'q', 'Q':
+		return "quit", nil
+	case 'g', 'G':
+		return "goodbye", nil
+	case 3: // Ctrl+C
+		return "goodbye", nil
+	default:
+		return string(buf[0]), nil
 	}
-
-	return string(buf[:n]), nil
 }
 
 // executeCommand executes the selected menu command - unified for both SSH and local

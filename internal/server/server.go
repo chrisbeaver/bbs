@@ -8,6 +8,7 @@ import (
 
 	"bbs/internal/config"
 	"bbs/internal/database"
+	"bbs/internal/menu"
 	"bbs/internal/terminal"
 )
 
@@ -84,6 +85,9 @@ func (s *Server) NewSession(term terminal.Terminal, prefilledUsername string) *S
 
 	// Initialize the TerminalWriter for this session
 	session.writer = &TerminalWriter{session: session}
+
+	// Initialize the MenuRenderer
+	session.menuRenderer = menu.NewMenuRenderer(s.colorScheme, session.writer)
 
 	return session
 }
