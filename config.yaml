@@ -188,7 +188,7 @@ bbs:
 
 sysop:
     title: "System Administration"
-    instructions: "Use ↑↓ arrow keys to navigate, Enter to select, Q to quit"
+    instructions: "Navigate: ↑↓  Select: Enter  Quit: Q"
     options:
         - id: "create_user"
           title: "Create New User"

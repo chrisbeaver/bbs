@@ -67,7 +67,7 @@ func (m *Module) GetMenuTitle() string {
 func (m *Module) GetInstructions() string {
 	sysopConfig := m.config.GetMenuConfig("sysop")
 	if sysopConfig == nil {
-		return "Use ↑↓ arrow keys to navigate, Enter to select, Q to quit"
+		return "Navigate: ↑↓  Select: Enter  Quit: Q"
 	}
 	return sysopConfig.Instructions
 }

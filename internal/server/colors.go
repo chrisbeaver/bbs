@@ -192,27 +192,28 @@ func (cs *ColorScheme) CenterText(text string, terminalWidth int) string {
 
 // Helper function to strip ANSI codes for length calculation
 func (cs *ColorScheme) stripAnsiCodes(text string) string {
-	// Simple ANSI code removal - finds \033[...m sequences
+	// More robust ANSI stripping using a simple state machine
 	result := ""
-	inEscape := false
-
-	for i := 0; i < len(text); i++ {
-		if text[i] == '\033' && i+1 < len(text) && text[i+1] == '[' {
-			inEscape = true
-			i++ // skip the '['
-			continue
-		}
-
-		if inEscape {
-			if text[i] == 'm' {
-				inEscape = false
+	i := 0
+	
+	for i < len(text) {
+		if i <= len(text)-4 && text[i] == '\033' && text[i+1] == '[' {
+			// Found ESC[, skip until we find a letter (usually 'm')
+			i += 2 // skip \033[
+			for i < len(text) {
+				char := text[i]
+				i++
+				// ANSI sequences typically end with a letter
+				if (char >= 'A' && char <= 'Z') || (char >= 'a' && char <= 'z') {
+					break
+				}
 			}
-			continue
+		} else {
+			result += string(text[i])
+			i++
 		}
-
-		result += string(text[i])
 	}
-
+	
 	return result
 }
 

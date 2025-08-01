@@ -76,7 +76,7 @@ func (r *MenuRenderer) RenderConfigMenu(menuItem *config.MenuItem, selectedIndex
 	}
 
 	// Default instructions for config menus with hotkey info
-	instructions := "Use ↑↓ arrow keys to navigate, Enter to select, hotkeys to execute, Q for goodbye"
+	instructions := "Navigate: ↑↓  Select: Enter  Hotkeys: Execute  Quit: Q"
 
 	r.renderMenu(menuItem.Title, items, selectedIndex, instructions)
 }
@@ -141,41 +141,51 @@ func (r *MenuRenderer) renderMenu(title string, items []MenuItem, selectedIndex 
 
 // renderInstructions displays formatted instructions
 func (r *MenuRenderer) renderInstructions(instructionText string) {
-	// Parse instruction text to colorize special parts
-	instructions := r.colorScheme.Colorize("Use ", "text") +
+	// Build the plain text version first to calculate proper centering
+	plainInstructions := "Navigate: ↑↓  Select: Enter"
+
+	// Add hotkeys section if mentioned in instructions
+	if strings.Contains(instructionText, "hotkey") || strings.Contains(instructionText, "Hotkeys") {
+		plainInstructions += "  Hotkeys: Execute"
+	}
+
+	// Add read section if mentioned in instructions
+	if strings.Contains(instructionText, "read") || strings.Contains(instructionText, "Read") {
+		plainInstructions += "  Read: Enter"
+	}
+
+	plainInstructions += "  Quit: Q"
+
+	// Calculate centering based on plain text
+	textLen := len(plainInstructions)
+	padding := (r.terminalWidth - textLen) / 2
+	if padding < 0 {
+		padding = 0
+	}
+
+	// Now build the colored version
+	coloredInstructions := r.colorScheme.Colorize("Navigate: ", "text") +
 		r.colorScheme.Colorize("↑↓", "accent") +
-		r.colorScheme.Colorize(" arrow keys to navigate, ", "text") +
+		r.colorScheme.Colorize("  Select: ", "text") +
 		r.colorScheme.Colorize("Enter", "accent")
 
-	// Determine the action based on instruction text
-	if strings.Contains(instructionText, "read") {
-		instructions += r.colorScheme.Colorize(" to read, ", "text")
-	} else if strings.Contains(instructionText, "select") {
-		instructions += r.colorScheme.Colorize(" to select, ", "text")
-	} else {
-		// Default case
-		instructions += r.colorScheme.Colorize(" to select, ", "text")
+	// Add hotkeys section if mentioned in instructions
+	if strings.Contains(instructionText, "hotkey") || strings.Contains(instructionText, "Hotkeys") {
+		coloredInstructions += r.colorScheme.Colorize("  Hotkeys: ", "text") +
+			r.colorScheme.Colorize("Execute", "accent")
 	}
 
-	// Add hotkey information if mentioned in instructions
-	if strings.Contains(instructionText, "hotkey") {
-		instructions += r.colorScheme.Colorize("hotkeys", "accent") +
-			r.colorScheme.Colorize(" to execute, ", "text")
+	// Add read section if mentioned in instructions
+	if strings.Contains(instructionText, "read") || strings.Contains(instructionText, "Read") {
+		coloredInstructions += r.colorScheme.Colorize("  Read: ", "text") +
+			r.colorScheme.Colorize("Enter", "accent")
 	}
 
-	instructions += r.colorScheme.Colorize("Q", "accent")
+	coloredInstructions += r.colorScheme.Colorize("  Quit: ", "text") +
+		r.colorScheme.Colorize("Q", "accent")
 
-	// Determine the quit text based on instruction text
-	if strings.Contains(instructionText, "quit") {
-		instructions += r.colorScheme.Colorize(" to quit", "text")
-	} else if strings.Contains(instructionText, "goodbye") {
-		instructions += r.colorScheme.Colorize(" for goodbye", "text")
-	} else {
-		// Default fallback
-		instructions += r.colorScheme.Colorize(" to quit", "text")
-	}
-
-	centeredInstructions := r.colorScheme.CenterText(instructions, r.terminalWidth)
+	// Apply the padding calculated from plain text to the colored version
+	centeredInstructions := strings.Repeat(" ", padding) + coloredInstructions
 	r.writer.Write([]byte("\n" + centeredInstructions))
 }
 

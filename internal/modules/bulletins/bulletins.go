@@ -46,5 +46,5 @@ func (m *Module) GetMenuTitle() string {
 
 // GetInstructions implements OptionProvider interface
 func (m *Module) GetInstructions() string {
-	return "Use ↑↓ arrow keys to navigate, Enter to read, Q to quit"
+	return "Navigate: ↑↓  Read: Enter  Quit: Q"
 }
