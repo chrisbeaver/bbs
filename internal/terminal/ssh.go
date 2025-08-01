@@ -57,6 +57,11 @@ func (t *SSHTerminal) ReadLine() (string, error) {
 	return t.terminal.ReadLine()
 }
 
+func (t *SSHTerminal) ReadPassword() (string, error) {
+	// Read password without echoing
+	return t.terminal.ReadPassword("")
+}
+
 func (t *SSHTerminal) SetPrompt(prompt string) {
 	t.terminal.SetPrompt(prompt)
 }

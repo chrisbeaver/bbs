@@ -140,19 +140,8 @@ func (s *Session) displayWelcome() {
 
 // readInput reads user input with optional masking (for passwords)
 func (s *Session) readInput(maskInput bool) (string, error) {
-	// For SSH terminals, we can use ReadLine method for both cases
-	if sshTerm, ok := s.terminal.(*terminal.SSHTerminal); ok {
-		if maskInput {
-			// For password input, we'll need to implement a ReadPassword method in SSHTerminal
-			// For now, use ReadLine and note that SSH terminals often handle masking at the client level
-			return sshTerm.ReadLine()
-		} else {
-			// For username input
-			return sshTerm.ReadLine()
-		}
-	}
-
-	// For local sessions using Terminal interface
+	// Use character-by-character reading for both SSH and local terminals
+	// to ensure consistent non-echoing behavior
 	var input string
 	buf := make([]byte, 1)
 
@@ -184,11 +173,11 @@ func (s *Session) readInput(maskInput bool) (string, error) {
 			// Add character to input
 			if buf[0] >= 32 && buf[0] <= 126 { // Printable ASCII
 				input += string(buf[0])
+				// Don't echo input - let the user type without seeing characters
 				if maskInput {
 					s.terminal.Write([]byte("*"))
-				} else {
-					s.terminal.Write([]byte(string(buf[0])))
 				}
+				// For non-masked input, don't echo anything
 			}
 		}
 	}
