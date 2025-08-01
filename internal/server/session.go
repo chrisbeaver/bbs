@@ -2,6 +2,7 @@ package server
 
 import (
 	"fmt"
+	"strings"
 
 	"bbs/internal/config"
 	"bbs/internal/database"
@@ -287,6 +288,22 @@ func (s *Session) menuLoop() {
 				return
 
 			default:
+				// Check for hotkey matches
+				if len(key) == 1 {
+					keyLower := strings.ToLower(key)
+					for _, item := range accessibleItems {
+						if item.Hotkey != "" && strings.ToLower(item.Hotkey) == keyLower {
+							// Found matching hotkey - execute the command
+							if !s.executeCommand(&item) {
+								// Show cursor before exiting
+								s.write([]byte(menu.ShowCursor))
+								return
+							}
+							// Break out of navigation loop to redisplay menu
+							break NavigationLoop
+						}
+					}
+				}
 				// Ignore other keys
 				continue
 			}

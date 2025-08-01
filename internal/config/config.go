@@ -49,6 +49,7 @@ type MenuItem struct {
 	Description string     `yaml:"description"`
 	Command     string     `yaml:"command"`
 	AccessLevel int        `yaml:"access_level"`
+	Hotkey      string     `yaml:"hotkey,omitempty"`
 	Submenu     []MenuItem `yaml:"submenu,omitempty"`
 }
 

@@ -135,25 +135,30 @@ func MoveCursorDown(lines int) string {
 
 // Selection highlighting
 func (cs *ColorScheme) HighlightSelection(text string, selected bool, width int) string {
+	// Calculate padding based on clean text length (without ANSI codes)
+	cleanText := cs.stripAnsiCodes(text)
+	textLen := len(cleanText)
+
 	if selected {
-		// Create a full-width highlight bar
-		padding := width - len(text)
+		// Create a full-width highlight bar - NO BACKGROUND COLOR, just bright white text
+		padding := width - textLen - 2 // Account for leading and trailing spaces
 		if padding < 0 {
 			padding = 0
 		}
-		highlightText := " " + text + strings.Repeat(" ", padding-1)
-		return cs.ColorizeWithBg(highlightText, "highlight", "primary")
+
+		// For selected items, change text to bright white while keeping hotkey bright yellow
+		adjustedText := cs.adjustColorsForSelection(text)
+		highlightText := " " + adjustedText + strings.Repeat(" ", padding) + " "
+		return highlightText // No background color applied
 	}
 	// Non-selected items get normal padding
-	padding := width - len(text)
+	padding := width - textLen - 2 // Account for leading and trailing spaces
 	if padding < 0 {
 		padding = 0
 	}
-	normalText := " " + text + strings.Repeat(" ", padding-1)
+	normalText := " " + text + strings.Repeat(" ", padding) + " "
 	return cs.Colorize(normalText, "text")
-}
-
-// Create decorative border pattern
+} // Create decorative border pattern
 func (cs *ColorScheme) CreateBorderPattern(width int, pattern string) string {
 	if len(pattern) == 0 {
 		pattern = "-"
@@ -280,4 +285,86 @@ func (cs *ColorScheme) CreateWelcomeBanner(systemName, welcomeMsg string) string
 	banner += cs.Colorize(welcomeMsg, "text") + "\n\n"
 
 	return banner
+}
+
+// replaceTextColorInSelection replaces text color codes in a string while preserving accent (hotkey) colors
+func (cs *ColorScheme) replaceTextColorInSelection(text, newColor string) string {
+	// Get the color codes
+	textColor := cs.GetColor("text")
+	accentColor := cs.GetColor("accent")
+	newColorCode := cs.GetColor(newColor)
+
+	result := text
+
+	// Replace text color with new color, but preserve accent colors
+	if textColor != "" {
+		// Replace text color followed by reset with new color followed by reset
+		result = strings.ReplaceAll(result, textColor, newColorCode)
+	}
+
+	// Ensure accent colors (hotkeys) remain bright yellow by replacing any occurrence
+	// of the new color that should be accent with accent color
+	if accentColor != "" && newColorCode != "" {
+		// This is a simple approach - in a real implementation you might need
+		// more sophisticated ANSI sequence parsing
+		result = strings.ReplaceAll(result, accentColor, accentColor)
+	}
+
+	return result
+}
+
+// adjustColorsForSelection changes text color to bright white while preserving bright yellow hotkey colors
+func (cs *ColorScheme) adjustColorsForSelection(text string) string {
+	// Get the color codes
+	textColor := cs.GetColor("text")
+	accentColor := cs.GetColor("accent")
+	brightWhite := cs.GetColor("bright_white")
+	brightYellow := cs.GetColor("bright_yellow")
+	reset := colorCodes["reset"]
+
+	// If there are no ANSI codes, just make the whole thing bright white
+	if !strings.Contains(text, "\033[") {
+		return brightWhite + text + reset
+	}
+
+	result := text
+
+	// Replace text color with bright white
+	if textColor != "" && brightWhite != "" {
+		result = strings.ReplaceAll(result, textColor, brightWhite)
+	}
+
+	// Ensure accent colors become bright yellow
+	if accentColor != "" && brightYellow != "" {
+		result = strings.ReplaceAll(result, accentColor, brightYellow)
+	}
+
+	// Handle the case where we have mixed content - need to ensure
+	// everything that's not explicitly colored as hotkey becomes bright white
+
+	// Simple approach: if the text starts without a color code, prepend bright white
+	if !strings.HasPrefix(result, "\033[") {
+		result = brightWhite + result
+	}
+
+	// Ensure any reset sequences are followed by bright white (except before accent colors)
+	resetPattern := reset
+	if resetPattern != "" {
+		// Replace reset codes with reset + bright white, but be careful around accent colors
+		parts := strings.Split(result, resetPattern)
+		if len(parts) > 1 {
+			for i := 0; i < len(parts)-1; i++ {
+				// Check if the next part starts with accent color
+				nextPart := parts[i+1]
+				if !strings.HasPrefix(nextPart, accentColor) && !strings.HasPrefix(nextPart, brightYellow) {
+					parts[i] = parts[i] + resetPattern + brightWhite
+				} else {
+					parts[i] = parts[i] + resetPattern
+				}
+			}
+			result = strings.Join(parts, "")
+		}
+	}
+
+	return result
 }

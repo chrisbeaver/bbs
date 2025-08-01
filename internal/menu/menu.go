@@ -66,16 +66,18 @@ func (r *MenuRenderer) RenderConfigMenu(menuItem *config.MenuItem, selectedIndex
 	var items []MenuItem
 	for _, item := range menuItem.Submenu {
 		if item.AccessLevel <= userAccessLevel {
+			// Process the description to highlight hotkeys
+			description := r.highlightHotkey(item.Description, item.Hotkey)
 			items = append(items, MenuItem{
 				ID:          item.ID,
-				Description: item.Description,
+				Description: description,
 				Data:        item,
 			})
 		}
 	}
 
-	// Default instructions for config menus
-	instructions := "Use ↑↓ arrow keys to navigate, Enter to select, Q for goodbye"
+	// Default instructions for config menus with hotkey info
+	instructions := "Use ↑↓ arrow keys to navigate, Enter to select, hotkeys to execute, Q for goodbye"
 
 	r.renderMenu(menuItem.Title, items, selectedIndex, instructions)
 }
@@ -153,6 +155,12 @@ func (r *MenuRenderer) renderInstructions(instructionText string) {
 		instructions += r.colorScheme.Colorize(" to select, ", "text")
 	}
 
+	// Add hotkey information if mentioned in instructions
+	if strings.Contains(instructionText, "hotkey") {
+		instructions += r.colorScheme.Colorize("hotkeys", "accent") +
+			r.colorScheme.Colorize(" to execute, ", "text")
+	}
+
 	instructions += r.colorScheme.Colorize("Q", "accent")
 
 	if strings.Contains(instructionText, "quit") {
@@ -183,4 +191,33 @@ func (r *MenuRenderer) calculateMaxWidth(items []MenuItem) int {
 	}
 
 	return maxWidth
+}
+
+// highlightHotkey highlights the hotkey character in the description
+func (r *MenuRenderer) highlightHotkey(description, hotkey string) string {
+	if hotkey == "" {
+		return description
+	}
+
+	// Convert hotkey to both upper and lower case for matching
+	hotkeyLower := strings.ToLower(hotkey)
+	hotkeyUpper := strings.ToUpper(hotkey)
+
+	// Find the first occurrence of the hotkey character (case insensitive)
+	for i, char := range description {
+		charStr := string(char)
+		if charStr == hotkeyLower || charStr == hotkeyUpper {
+			// Split the description and highlight the hotkey character
+			before := description[:i]
+			hotkeyChr := description[i : i+1]
+			after := description[i+1:]
+
+			// Highlight the hotkey character
+			highlightedHotkey := r.colorScheme.Colorize(hotkeyChr, "accent")
+			return before + highlightedHotkey + after
+		}
+	}
+
+	// If hotkey character not found in description, return as-is
+	return description
 }
