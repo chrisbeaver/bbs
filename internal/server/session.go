@@ -7,6 +7,7 @@ import (
 	"bbs/internal/database"
 	"bbs/internal/menu"
 	"bbs/internal/modules/bulletins"
+	"bbs/internal/modules/sysop"
 	"bbs/internal/terminal"
 )
 
@@ -435,12 +436,7 @@ func (s *Session) executeCommand(item *config.MenuItem) bool {
 		keyReader := &TerminalKeyReader{session: s}
 		bulletinsModule.Execute(s.writer, keyReader)
 		return true
-	case "messages":
-		// TODO: Implement messages module
-		s.write([]byte(s.colorScheme.Colorize("Messages feature coming soon...", "text") + "\n"))
-		s.waitForKey()
-		return true
-	case "sysop_menu", "sysop_stats", "sysop_user_menu", "sysop_bulletin_menu", "sysop_config", "sysop_maintenance":
+	case "sysop", "sysop_menu":
 		// Check if user has sysop access
 		if s.user == nil || s.user.AccessLevel < 255 {
 			s.write([]byte(s.colorScheme.Colorize("Access denied. Sysop privileges required.", "error") + "\n"))
@@ -448,8 +444,13 @@ func (s *Session) executeCommand(item *config.MenuItem) bool {
 			return true
 		}
 
-		// For now, show a placeholder message for sysop functionality
-		s.write([]byte(s.colorScheme.Colorize("Sysop functionality will be integrated soon...", "text") + "\n"))
+		sysopModule := sysop.NewModule(s.db, s.colorScheme)
+		keyReader := &TerminalKeyReader{session: s}
+		sysopModule.Execute(s.writer, keyReader)
+		return true
+	case "messages":
+		// TODO: Implement messages module
+		s.write([]byte(s.colorScheme.Colorize("Messages feature coming soon...", "text") + "\n"))
 		s.waitForKey()
 		return true
 	case "goodbye":
