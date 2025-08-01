@@ -33,7 +33,12 @@ func NewModule(db *database.DB, colorScheme menu.ColorScheme, cfg *config.Config
 func (m *Module) LoadOptions(db *database.DB) ([]base.MenuOption, error) {
 	var options []base.MenuOption
 
-	for _, configOption := range m.config.Sysop.Options {
+	sysopConfig := m.config.GetMenuConfig("sysop")
+	if sysopConfig == nil {
+		return options, nil
+	}
+
+	for _, configOption := range sysopConfig.Options {
 		// Map command names to handler functions
 		handler := m.getHandlerForCommand(configOption.Command)
 
@@ -51,12 +56,20 @@ func (m *Module) LoadOptions(db *database.DB) ([]base.MenuOption, error) {
 
 // GetMenuTitle implements OptionProvider interface
 func (m *Module) GetMenuTitle() string {
-	return m.config.Sysop.Title
+	sysopConfig := m.config.GetMenuConfig("sysop")
+	if sysopConfig == nil {
+		return "System Administration"
+	}
+	return sysopConfig.Title
 }
 
 // GetInstructions implements OptionProvider interface
 func (m *Module) GetInstructions() string {
-	return m.config.Sysop.Instructions
+	sysopConfig := m.config.GetMenuConfig("sysop")
+	if sysopConfig == nil {
+		return "Use ↑↓ arrow keys to navigate, Enter to select, Q to quit"
+	}
+	return sysopConfig.Instructions
 }
 
 // getHandlerForCommand maps command names to handler functions
