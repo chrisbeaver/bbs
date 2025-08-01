@@ -93,7 +93,9 @@ func runLocalMode() {
 	fmt.Println("Starting local BBS session...")
 	fmt.Println("Press Ctrl+C to exit")
 
-	session := server.NewLocalSession(term, db, cfg)
+	// Use unified server
+	bbsServer := server.NewServer(cfg, db)
+	session := bbsServer.NewLocalSession(term)
 	session.Run()
 }
 
@@ -114,7 +116,8 @@ func runServerMode() {
 	}
 	defer db.Close()
 
-	sshServer := server.NewSSHServer(cfg, db)
+	// Use unified server for SSH
+	bbsServer := server.NewServer(cfg, db)
 
 	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", cfg.Server.Port))
 	if err != nil {
@@ -135,7 +138,7 @@ func runServerMode() {
 				log.Printf("Failed to accept connection: %v", err)
 				continue
 			}
-			go sshServer.HandleConnection(conn)
+			go bbsServer.HandleConnection(conn)
 		}
 	}()
 

@@ -30,16 +30,7 @@ func (t *LocalTerminal) Read(p []byte) (n int, err error) {
 }
 
 func (t *LocalTerminal) Write(p []byte) (n int, err error) {
-	// Use term.Terminal.Write() for consistent formatting with SSH connections
-	if t.terminal == nil {
-		// Create a ReadWriter that combines stdin and stdout
-		rw := struct {
-			io.Reader
-			io.Writer
-		}{t.stdin, t.stdout}
-		t.terminal = term.NewTerminal(rw, "")
-	}
-	return t.terminal.Write(p)
+	return t.stdout.Write(p)
 }
 
 func (t *LocalTerminal) Size() (width int, height int, error error) {
@@ -90,7 +81,11 @@ func (t *LocalTerminal) ReadLine() (string, error) {
 
 	// Create terminal for reading lines when not in raw mode
 	if t.terminal == nil {
-		t.terminal = term.NewTerminal(os.Stdin, "")
+		rw := struct {
+			io.Reader
+			io.Writer
+		}{t.stdin, t.stdout}
+		t.terminal = term.NewTerminal(rw, "")
 	}
 	return t.terminal.ReadLine()
 }
@@ -103,7 +98,11 @@ func (t *LocalTerminal) SetPrompt(prompt string) {
 
 	// Create terminal for setting prompts when not in raw mode
 	if t.terminal == nil {
-		t.terminal = term.NewTerminal(os.Stdin, "")
+		rw := struct {
+			io.Reader
+			io.Writer
+		}{t.stdin, t.stdout}
+		t.terminal = term.NewTerminal(rw, "")
 	}
 	t.terminal.SetPrompt(prompt)
 }
@@ -111,7 +110,12 @@ func (t *LocalTerminal) SetPrompt(prompt string) {
 // GetTerminal returns the underlying term.Terminal for compatibility
 func (t *LocalTerminal) GetTerminal() *term.Terminal {
 	if t.terminal == nil {
-		t.terminal = term.NewTerminal(os.Stdin, "")
+		// Create a ReadWriter that combines stdin and stdout
+		rw := struct {
+			io.Reader
+			io.Writer
+		}{t.stdin, t.stdout}
+		t.terminal = term.NewTerminal(rw, "")
 	}
 	return t.terminal
 }

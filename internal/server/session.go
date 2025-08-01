@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	"golang.org/x/term"
-
 	"bbs/internal/config"
 	"bbs/internal/database"
 	"bbs/internal/modules/bulletins"
@@ -14,77 +12,82 @@ import (
 
 // Session represents a unified BBS session that can work with any terminal type
 type Session struct {
-	terminal      terminal.Terminal
-	termTerminal  *term.Terminal // For compatibility with existing SSH code
-	db            *database.DB
-	config        *config.Config
-	user          *database.User
-	currentMenu   string
-	menuHistory   []string
-	selectedIndex int
-	authenticated bool
-	colorScheme   *ColorScheme
+	terminal          terminal.Terminal
+	writer            *TerminalWriter // Use TerminalWriter for all output
+	db                *database.DB
+	config            *config.Config
+	user              *database.User
+	currentMenu       string
+	menuHistory       []string
+	selectedIndex     int
+	authenticated     bool
+	colorScheme       *ColorScheme
+	prefilledUsername string // For SSH connections where username is already known
 }
 
-// NewSession creates a new unified session
-func NewSession(term terminal.Terminal, termTerm *term.Terminal, db *database.DB, cfg *config.Config) *Session {
-	return &Session{
-		terminal:      term,
-		termTerminal:  termTerm,
-		db:            db,
-		config:        cfg,
-		currentMenu:   "main",
-		selectedIndex: 0,
-		authenticated: false,
-		colorScheme:   NewColorScheme(&cfg.BBS.Colors),
-	}
-}
-
-// LocalSession wraps the unified session for local terminal access
-type LocalSession struct {
-	*Session
-}
-
-// NewLocalSession creates a new local session
-func NewLocalSession(term terminal.Terminal, db *database.DB, cfg *config.Config) *LocalSession {
-	// For local sessions, we don't have a term.Terminal, so we pass nil
-	session := NewSession(term, nil, db, cfg)
-	return &LocalSession{Session: session}
-}
-
-// Run starts the local BBS session
-func (s *LocalSession) Run() {
-	defer s.terminal.Close()
+// Run is the unified entry point for all sessions (SSH and local)
+func (s *Session) Run() {
+	defer func() {
+		if s.terminal != nil {
+			s.terminal.Close()
+		}
+	}()
 
 	// Display welcome message
 	s.displayWelcome()
 
-	// Login process for local sessions
+	// Handle authentication (username prefilled for SSH)
 	if !s.handleLogin() {
 		return
 	}
 
-	// Switch to raw mode before showing bulletins for proper navigation
-	if err := s.terminal.MakeRaw(); err != nil {
-		s.terminal.Write([]byte("Warning: Could not set raw mode for navigation\n"))
+	// Switch to raw mode for navigation (only for local terminals that support it)
+	if s.terminal != nil {
+		if err := s.terminal.MakeRaw(); err != nil {
+			s.write([]byte("Warning: Could not set raw mode for navigation\n"))
+		}
 	}
 
 	// Show bulletins after successful login
-	bulletinsModule := bulletins.NewModule(s.Session.db, s.Session.colorScheme)
-	writer := &LocalWriter{session: s.Session}
-	keyReader := &LocalKeyReader{session: s.Session}
+	bulletinsModule := bulletins.NewModule(s.db, s.colorScheme)
+	writer := &TerminalWriter{session: s}
+	keyReader := &TerminalKeyReader{session: s}
 	bulletinsModule.Execute(writer, keyReader)
 
 	// Set to main menu after bulletins
 	s.currentMenu = "main"
 
-	// Main menu loop - now using unified session logic
+	// Main menu loop
 	s.menuLoop()
 }
 
-// handleLogin handles the login process for local sessions
-func (s *LocalSession) handleLogin() bool {
-	s.write([]byte(s.colorScheme.Colorize("=== Searchlight BBS Local Access ===", "header") + "\n\n"))
+// handleLogin handles the login process for both SSH and local sessions
+func (s *Session) handleLogin() bool {
+	// For SSH sessions, user is already authenticated, just get user info
+	if s.prefilledUsername != "" {
+		user, err := s.db.GetUser(s.prefilledUsername)
+		if err != nil {
+			s.write([]byte(s.colorScheme.Colorize("Error retrieving user information.", "error") + "\n"))
+			return false
+		}
+		s.user = user
+		s.authenticated = true
+		s.db.UpdateUserLastCall(s.prefilledUsername)
+
+		s.write([]byte(s.colorScheme.Colorize(fmt.Sprintf("Welcome back, %s!", user.Username), "accent") + "\n"))
+		if user.LastCall != nil {
+			lastCallStr := fmt.Sprintf("Last call: %s", user.LastCall.Format("2006-01-02 15:04:05"))
+			s.write([]byte(s.colorScheme.Colorize(lastCallStr, "text") + "\n"))
+		} else {
+			s.write([]byte(s.colorScheme.Colorize("Last call: First time login", "text") + "\n"))
+		}
+		totalCallsStr := fmt.Sprintf("Total calls: %d", user.TotalCalls)
+		s.write([]byte(s.colorScheme.Colorize(totalCallsStr, "text") + "\n\n"))
+		return true
+	}
+
+	// For local sessions, perform login process
+	s.write([]byte(s.colorScheme.Colorize("=== Searchlight BBS ===", "header") + "\n\n"))
 
 	for attempts := 0; attempts < 3; attempts++ {
 		// Get username
@@ -130,32 +133,71 @@ func (s *LocalSession) handleLogin() bool {
 }
 
 // displayWelcome displays the welcome message
-func (s *LocalSession) displayWelcome() {
+func (s *Session) displayWelcome() {
 	banner := s.colorScheme.CreateWelcomeBanner(s.config.BBS.SystemName, s.config.BBS.WelcomeMsg)
 	s.write([]byte(banner))
 }
 
-// write is a unified method to write to either terminal type
-func (s *Session) write(data []byte) {
-	if s.termTerminal != nil {
-		// SSH session - use term.Terminal
-		s.termTerminal.Write(data)
-	} else {
-		// Local session - use our Terminal interface
-		s.terminal.Write(data)
+// readInput reads user input with optional masking (for passwords)
+func (s *Session) readInput(maskInput bool) (string, error) {
+	// For SSH terminals, we can use ReadLine method for both cases
+	if sshTerm, ok := s.terminal.(*terminal.SSHTerminal); ok {
+		if maskInput {
+			// For password input, we'll need to implement a ReadPassword method in SSHTerminal
+			// For now, use ReadLine and note that SSH terminals often handle masking at the client level
+			return sshTerm.ReadLine()
+		} else {
+			// For username input
+			return sshTerm.ReadLine()
+		}
+	}
+
+	// For local sessions using Terminal interface
+	var input string
+	buf := make([]byte, 1)
+
+	for {
+		n, err := s.terminal.Read(buf)
+		if err != nil {
+			return "", err
+		}
+
+		if n == 0 {
+			continue
+		}
+
+		switch buf[0] {
+		case 13, 10: // Enter or newline - finish input
+			s.terminal.Write([]byte("\n"))
+			return input, nil
+		case 8, 127: // Backspace or DEL
+			if len(input) > 0 {
+				input = input[:len(input)-1]
+				// Move cursor back, overwrite with space, move back again
+				s.terminal.Write([]byte("\b \b"))
+			}
+		case 3: // Ctrl+C
+			return "", fmt.Errorf("interrupted")
+		case 27: // Escape - ignore
+			continue
+		default:
+			// Add character to input
+			if buf[0] >= 32 && buf[0] <= 126 { // Printable ASCII
+				input += string(buf[0])
+				if maskInput {
+					s.terminal.Write([]byte("*"))
+				} else {
+					s.terminal.Write([]byte(string(buf[0])))
+				}
+			}
+		}
 	}
 }
 
-// Write implements io.Writer interface for bulletins module
-func (s *Session) Write(data []byte) (int, error) {
-	if s.termTerminal != nil {
-		// SSH session - use term.Terminal
-		return s.termTerminal.Write(data)
-	} else {
-		// Local session - use our Terminal interface
-		s.terminal.Write(data)
-		return len(data), nil
-	}
+// write is a unified method to write to either terminal type
+func (s *Session) write(data []byte) {
+	// Use the same TerminalWriter that modules use for 100% consistency
+	s.writer.Write(data)
 }
 
 // menuLoop handles the main menu interaction - unified for both SSH and local
@@ -276,7 +318,7 @@ func (s *Session) displayMenu(menu *config.MenuItem) {
 
 	// Decorative separator (centered to match title width)
 	// Calculate the actual title length (without ANSI codes) for proper separator width
-	cleanTitle := s.colorScheme.stripAnsiCodes(title)
+	cleanTitle := s.colorScheme.StripAnsiCodes(title)
 	separator := s.colorScheme.DrawSeparator(len(cleanTitle), "═")
 	centeredSeparator := s.colorScheme.CenterText(separator, terminalWidth)
 	s.write([]byte(centeredSeparator + "\n\n"))
@@ -358,7 +400,8 @@ func (s *Session) displayMenu(menu *config.MenuItem) {
 
 // readKey reads a single key press - unified for both SSH and local
 func (s *Session) readKey() (string, error) {
-	if s.termTerminal != nil {
+	// For SSH terminals, use the terminal interface
+	if _, ok := s.terminal.(*terminal.SSHTerminal); ok {
 		// SSH session - use existing SSH readKey logic
 		return s.readKeySSH()
 	} else {
@@ -422,11 +465,45 @@ func (s *Session) readKeyLocal() (string, error) {
 	}
 }
 
-// readKeySSH handles key reading for SSH terminal (placeholder - implement with existing SSH logic)
+// readKeySSH handles key reading for SSH terminal
 func (s *Session) readKeySSH() (string, error) {
-	// This should be implemented with the existing SSH readKey logic
-	// For now, just return enter to avoid compilation errors
-	return "enter", nil
+	buf := make([]byte, 3)
+	n, err := s.terminal.Read(buf)
+	if err != nil {
+		return "", err
+	}
+
+	switch n {
+	case 1:
+		// Single character
+		char := string(buf[0])
+		switch buf[0] {
+		case 13: // Enter
+			return "enter", nil
+		case 27: // Escape (might be start of arrow key sequence)
+			return "escape", nil
+		case 'q', 'Q':
+			return "quit", nil
+		default:
+			return char, nil
+		}
+	case 3:
+		// Arrow key sequence: ESC [ A/B/C/D
+		if buf[0] == 27 && buf[1] == 91 {
+			switch buf[2] {
+			case 65: // Up arrow
+				return "up", nil
+			case 66: // Down arrow
+				return "down", nil
+			case 67: // Right arrow
+				return "right", nil
+			case 68: // Left arrow
+				return "left", nil
+			}
+		}
+	}
+
+	return string(buf[:n]), nil
 }
 
 // executeCommand executes the selected menu command - unified for both SSH and local
@@ -434,15 +511,28 @@ func (s *Session) executeCommand(item *config.MenuItem) bool {
 	switch item.Command {
 	case "bulletins":
 		bulletinsModule := bulletins.NewModule(s.db, s.colorScheme)
-		writer := &LocalWriter{session: s}
-		keyReader := &LocalKeyReader{session: s}
-		bulletinsModule.Execute(writer, keyReader)
+		keyReader := &TerminalKeyReader{session: s}
+		bulletinsModule.Execute(s.writer, keyReader)
 		return true
 	case "messages":
 		// TODO: Implement messages module
 		s.write([]byte(s.colorScheme.Colorize("Messages feature coming soon...", "text") + "\n"))
 		s.waitForKey()
 		return true
+	case "sysop_menu", "sysop_stats", "sysop_user_menu", "sysop_bulletin_menu", "sysop_config", "sysop_maintenance":
+		// Check if user has sysop access
+		if s.user == nil || s.user.AccessLevel < 255 {
+			s.write([]byte(s.colorScheme.Colorize("Access denied. Sysop privileges required.", "error") + "\n"))
+			s.waitForKey()
+			return true
+		}
+
+		// For now, show a placeholder message for sysop functionality
+		s.write([]byte(s.colorScheme.Colorize("Sysop functionality will be integrated soon...", "text") + "\n"))
+		s.waitForKey()
+		return true
+	case "goodbye":
+		return false
 	case "logout":
 		return false
 	default:
@@ -464,74 +554,13 @@ func (s *Session) executeCommand(item *config.MenuItem) bool {
 func (s *Session) waitForKey() {
 	s.write([]byte(s.colorScheme.Colorize("\nPress any key to continue...", "text")))
 
-	// Read a single key
-	if s.termTerminal != nil {
-		// SSH session
-		s.termTerminal.ReadLine()
+	// For both SSH and local, use the unified terminal interface
+	if sshTerm, ok := s.terminal.(*terminal.SSHTerminal); ok {
+		// SSH session - use ReadLine since it handles enter key nicely
+		sshTerm.ReadLine()
 	} else {
-		// Local session
+		// Local session - read single byte
 		buf := make([]byte, 1)
 		s.terminal.Read(buf)
 	}
-}
-
-// readInput reads user input with optional masking (for passwords) - for local sessions only
-func (s *LocalSession) readInput(maskInput bool) (string, error) {
-	var input string
-	buf := make([]byte, 1)
-
-	for {
-		n, err := s.terminal.Read(buf)
-		if err != nil {
-			return "", err
-		}
-
-		if n == 0 {
-			continue
-		}
-
-		switch buf[0] {
-		case 13, 10: // Enter or newline - finish input
-			s.terminal.Write([]byte("\n"))
-			return input, nil
-		case 8, 127: // Backspace or DEL
-			if len(input) > 0 {
-				input = input[:len(input)-1]
-				// Move cursor back, overwrite with space, move back again
-				s.terminal.Write([]byte("\b \b"))
-			}
-		case 3: // Ctrl+C
-			return "", fmt.Errorf("interrupted")
-		case 27: // Escape - ignore
-			continue
-		default:
-			// Add character to input
-			if buf[0] >= 32 && buf[0] <= 126 { // Printable ASCII
-				input += string(buf[0])
-				if maskInput {
-					s.terminal.Write([]byte("*"))
-				}
-				// For username, don't echo anything (no output)
-			}
-		}
-	}
-}
-
-// LocalWriter implements the Writer interface for local sessions
-type LocalWriter struct {
-	session *Session
-}
-
-func (w *LocalWriter) Write(data []byte) (int, error) {
-	w.session.write(data)
-	return len(data), nil
-}
-
-// LocalKeyReader implements the KeyReader interface for local sessions
-type LocalKeyReader struct {
-	session *Session
-}
-
-func (l *LocalKeyReader) ReadKey() (string, error) {
-	return l.session.readKey()
 }
