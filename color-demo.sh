@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Color demonstration for the BBS
-echo "Searchlight BBS Color Preview"
+echo "Coastline BBS Color Preview"
 echo "============================"
 echo ""
 
@@ -18,10 +18,10 @@ echo ""
 
 # Show a sample menu
 echo -e "\033[34m╔══════════════════════════════════════════════════════════════════════════════╗\033[0m"
-echo -e "\033[34m║\033[36m                            Searchlight BBS                            \033[34m║\033[0m"
+echo -e "\033[34m║\033[36m                            Coastline BBS                            \033[34m║\033[0m"
 echo -e "\033[34m╚══════════════════════════════════════════════════════════════════════════════╝\033[0m"
 echo ""
-echo -e "\033[37mWelcome to Searchlight BBS!\033[0m"
+echo -e "\033[37mWelcome to Coastline BBS!\033[0m"
 echo ""
 echo -e "\033[33mWelcome back, sysop!\033[0m"
 echo -e "\033[37mLast call: First time login\033[0m"

@@ -147,10 +147,13 @@ func (r *MenuRenderer) renderInstructions(instructionText string) {
 		r.colorScheme.Colorize(" arrow keys to navigate, ", "text") +
 		r.colorScheme.Colorize("Enter", "accent")
 
-	// Add custom instruction ending
+	// Determine the action based on instruction text
 	if strings.Contains(instructionText, "read") {
 		instructions += r.colorScheme.Colorize(" to read, ", "text")
+	} else if strings.Contains(instructionText, "select") {
+		instructions += r.colorScheme.Colorize(" to select, ", "text")
 	} else {
+		// Default case
 		instructions += r.colorScheme.Colorize(" to select, ", "text")
 	}
 
@@ -162,10 +165,14 @@ func (r *MenuRenderer) renderInstructions(instructionText string) {
 
 	instructions += r.colorScheme.Colorize("Q", "accent")
 
+	// Determine the quit text based on instruction text
 	if strings.Contains(instructionText, "quit") {
 		instructions += r.colorScheme.Colorize(" to quit", "text")
-	} else {
+	} else if strings.Contains(instructionText, "goodbye") {
 		instructions += r.colorScheme.Colorize(" for goodbye", "text")
+	} else {
+		// Default fallback
+		instructions += r.colorScheme.Colorize(" to quit", "text")
 	}
 
 	centeredInstructions := r.colorScheme.CenterText(instructions, r.terminalWidth)

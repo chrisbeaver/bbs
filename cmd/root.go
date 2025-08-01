@@ -23,9 +23,9 @@ var (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "searchlight-bbs",
+	Use:   "coastline-bbs",
 	Short: "A classic BBS experience over SSH",
-	Long: `Searchlight BBS is a modern recreation of classic bulletin board 
+	Long: `Coastline BBS is a modern recreation of classic bulletin board 
 systems, accessible via SSH with authentic terminal-based interaction.
 
 Run without flags to start the SSH server, or use -l/--local to 
@@ -125,7 +125,7 @@ func runServerMode() {
 	}
 	defer listener.Close()
 
-	log.Printf("Searchlight BBS Server listening on port %d", cfg.Server.Port)
+	log.Printf("Coastline BBS Server listening on port %d", cfg.Server.Port)
 
 	// Handle graceful shutdown
 	sigChan := make(chan os.Signal, 1)

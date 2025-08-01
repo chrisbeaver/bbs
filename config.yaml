@@ -7,10 +7,10 @@ database:
     path: "bbs.db"
 
 bbs:
-    system_name: "Searchlight BBS"
+    system_name: "Coastline BBS"
     sysop_name: "Sysop"
     welcome_message: |
-        Welcome to Searchlight BBS!
+        Welcome to Coastline BBS!
 
         A classic bulletin board system experience over SSH.
         Connect with other users, read messages, and explore!
@@ -185,3 +185,40 @@ bbs:
                 command: "sysop_bulletin_delete"
                 access_level: 255
                 hotkey: "d"
+
+sysop:
+    title: "System Administration"
+    instructions: "Use ↑↓ arrow keys to navigate, Enter to select, Q to quit"
+    options:
+        - id: "create_user"
+          title: "Create New User"
+          description: "1) Create New User Account"
+          command: "create_user"
+        - id: "edit_user"
+          title: "Edit User Account"
+          description: "2) Edit User Account"
+          command: "edit_user"
+        - id: "delete_user"
+          title: "Delete User Account"
+          description: "3) Delete User Account"
+          command: "delete_user"
+        - id: "view_users"
+          title: "View All Users"
+          description: "4) View All Users"
+          command: "view_users"
+        - id: "change_password"
+          title: "Change User Password"
+          description: "5) Change User Password"
+          command: "change_password"
+        - id: "toggle_user"
+          title: "Toggle User Status"
+          description: "6) Toggle User Active Status"
+          command: "toggle_user"
+        - id: "system_stats"
+          title: "System Statistics"
+          description: "7) System Statistics"
+          command: "system_stats"
+        - id: "bulletin_management"
+          title: "Bulletin Management"
+          description: "8) Bulletin Management"
+          command: "bulletin_management"

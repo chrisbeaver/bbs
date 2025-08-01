@@ -90,7 +90,7 @@ func (s *Session) handleLogin() bool {
 	}
 
 	// For local sessions, perform login process
-	s.write([]byte(s.colorScheme.Colorize("=== Searchlight BBS ===", "header") + "\n\n"))
+	s.write([]byte(s.colorScheme.Colorize("=== Coastline BBS ===", "header") + "\n\n"))
 
 	for attempts := 0; attempts < 3; attempts++ {
 		// Get username
@@ -461,7 +461,7 @@ func (s *Session) executeCommand(item *config.MenuItem) bool {
 			return true
 		}
 
-		sysopModule := sysop.NewModule(s.db, s.colorScheme)
+		sysopModule := sysop.NewModule(s.db, s.colorScheme, s.config)
 		keyReader := &TerminalKeyReader{session: s}
 		sysopModule.Execute(s.writer, keyReader)
 		return true

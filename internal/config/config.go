@@ -6,10 +6,26 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+// SysopMenuOption represents a sysop menu option from config
+type SysopMenuOption struct {
+	ID          string `yaml:"id"`
+	Title       string `yaml:"title"`
+	Description string `yaml:"description"`
+	Command     string `yaml:"command"`
+}
+
+// SysopConfig represents the sysop menu configuration
+type SysopConfig struct {
+	Title        string            `yaml:"title"`
+	Instructions string            `yaml:"instructions"`
+	Options      []SysopMenuOption `yaml:"options"`
+}
+
 type Config struct {
 	Server   ServerConfig   `yaml:"server"`
 	Database DatabaseConfig `yaml:"database"`
 	BBS      BBSConfig      `yaml:"bbs"`
+	Sysop    SysopConfig    `yaml:"sysop"`
 }
 
 type ServerConfig struct {
@@ -65,9 +81,9 @@ func Load(filename string) (*Config, error) {
 			Path: "bbs.db",
 		},
 		BBS: BBSConfig{
-			SystemName:    "Searchlight BBS",
+			SystemName:    "Coastline BBS",
 			SysopName:     "Sysop",
-			WelcomeMsg:    "Welcome to Searchlight BBS!",
+			WelcomeMsg:    "Welcome to Coastline BBS!",
 			MaxLineLength: 79,
 			Colors: ColorConfig{
 				Primary:    "cyan",
@@ -97,6 +113,20 @@ func Load(filename string) (*Config, error) {
 						{ID: "goodbye", Title: "Goodbye", Description: "Logoff system", Command: "goodbye", AccessLevel: 0},
 					},
 				},
+			},
+		},
+		Sysop: SysopConfig{
+			Title:        "System Administration",
+			Instructions: "Use ↑↓ arrow keys to navigate, Enter to select, Q to quit",
+			Options: []SysopMenuOption{
+				{ID: "create_user", Title: "Create New User", Description: "1) Create New User Account", Command: "create_user"},
+				{ID: "edit_user", Title: "Edit User Account", Description: "2) Edit User Account", Command: "edit_user"},
+				{ID: "delete_user", Title: "Delete User Account", Description: "3) Delete User Account", Command: "delete_user"},
+				{ID: "view_users", Title: "View All Users", Description: "4) View All Users", Command: "view_users"},
+				{ID: "change_password", Title: "Change User Password", Description: "5) Change User Password", Command: "change_password"},
+				{ID: "toggle_user", Title: "Toggle User Status", Description: "6) Toggle User Active Status", Command: "toggle_user"},
+				{ID: "system_stats", Title: "System Statistics", Description: "7) System Statistics", Command: "system_stats"},
+				{ID: "bulletin_management", Title: "Bulletin Management", Description: "8) Bulletin Management", Command: "bulletin_management"},
 			},
 		},
 	}

@@ -47,10 +47,10 @@ func getSeedUsers() []UserSeed {
 func getSeedBulletins() []BulletinSeed {
 	return []BulletinSeed{
 		{
-			Title: "Welcome to Searchlight BBS!",
-			Body: `Welcome to Searchlight BBS - A Classic Experience Reborn!
+			Title: "Welcome to Coastline BBS!",
+			Body: `Welcome to Coastline BBS - A Classic Experience Reborn!
 
-This is a faithful recreation of the classic Searchlight BBS software,
+This is a faithful recreation of the classic Coastline BBS software,
 bringing the nostalgic bulletin board system experience to the modern age.
 
 Features:
@@ -70,7 +70,7 @@ Happy BBSing!`,
 		},
 		{
 			Title: "System Information",
-			Body: `Technical Details - Searchlight BBS Server
+			Body: `Technical Details - Coastline BBS Server
 
 This BBS is built with modern technology while maintaining the classic feel:
 
