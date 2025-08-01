@@ -5,24 +5,15 @@ import (
 
 	"bbs/internal/database"
 	"bbs/internal/menu"
+	"bbs/internal/modules"
 )
-
-// KeyReader interface for reading keys
-type KeyReader interface {
-	ReadKey() (string, error)
-}
-
-// Writer interface for writing output
-type Writer interface {
-	Write([]byte) (int, error)
-}
 
 // SysopOption represents a sysop menu option
 type SysopOption struct {
 	ID          string
 	Title       string
 	Description string
-	Handler     func(writer Writer, keyReader KeyReader, db *database.DB, colorScheme menu.ColorScheme) bool
+	Handler     func(writer modules.Writer, keyReader modules.KeyReader, db *database.DB, colorScheme menu.ColorScheme) bool
 }
 
 // Module implements the sysop functionality using the unified menu system
@@ -117,7 +108,7 @@ func (m *Module) GetInstructions() string {
 }
 
 // Execute runs the sysop module using the unified menu system
-func (m *Module) Execute(writer Writer, keyReader KeyReader) bool {
+func (m *Module) Execute(writer modules.Writer, keyReader modules.KeyReader) bool {
 	// Initialize menu renderer
 	menuRenderer := menu.NewMenuRenderer(m.colorScheme, writer)
 	m.selectedIndex = 0

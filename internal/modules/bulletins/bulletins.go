@@ -7,17 +7,8 @@ import (
 
 	"bbs/internal/database"
 	"bbs/internal/menu"
+	"bbs/internal/modules"
 )
-
-// KeyReader interface for reading keys
-type KeyReader interface {
-	ReadKey() (string, error)
-}
-
-// Writer interface for writing output
-type Writer interface {
-	Write([]byte) (int, error)
-}
 
 // Module implements the bulletins functionality using the unified menu system
 type Module struct {
@@ -60,7 +51,7 @@ func (m *Module) GetInstructions() string {
 }
 
 // Execute runs the bulletins module using the unified menu system
-func (m *Module) Execute(writer Writer, keyReader KeyReader) bool {
+func (m *Module) Execute(writer modules.Writer, keyReader modules.KeyReader) bool {
 	// Initialize menu renderer
 	menuRenderer := menu.NewMenuRenderer(m.colorScheme, writer)
 
@@ -135,7 +126,7 @@ func (m *Module) Execute(writer Writer, keyReader KeyReader) bool {
 }
 
 // showBulletin displays the full content of a bulletin
-func (m *Module) showBulletin(writer Writer, keyReader KeyReader, bulletin *database.Bulletin) {
+func (m *Module) showBulletin(writer modules.Writer, keyReader modules.KeyReader, bulletin *database.Bulletin) {
 	writer.Write([]byte(menu.ClearScreen))
 
 	// Header with bulletin title

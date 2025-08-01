@@ -8,10 +8,11 @@ import (
 
 	"bbs/internal/database"
 	"bbs/internal/menu"
+	"bbs/internal/modules"
 )
 
 // handleCreateUser creates a new user account
-func handleCreateUser(writer Writer, keyReader KeyReader, db *database.DB, colorScheme menu.ColorScheme) bool {
+func handleCreateUser(writer modules.Writer, keyReader modules.KeyReader, db *database.DB, colorScheme menu.ColorScheme) bool {
 	writer.Write([]byte(menu.ClearScreen))
 
 	header := colorScheme.Colorize("--- Create New User ---", "primary")
@@ -76,7 +77,7 @@ func handleCreateUser(writer Writer, keyReader KeyReader, db *database.DB, color
 }
 
 // handleEditUser edits an existing user account
-func handleEditUser(writer Writer, keyReader KeyReader, db *database.DB, colorScheme menu.ColorScheme) bool {
+func handleEditUser(writer modules.Writer, keyReader modules.KeyReader, db *database.DB, colorScheme menu.ColorScheme) bool {
 	writer.Write([]byte(menu.ClearScreen))
 
 	header := colorScheme.Colorize("--- Edit User Account ---", "primary")
@@ -147,7 +148,7 @@ func handleEditUser(writer Writer, keyReader KeyReader, db *database.DB, colorSc
 }
 
 // handleDeleteUser deletes a user account
-func handleDeleteUser(writer Writer, keyReader KeyReader, db *database.DB, colorScheme menu.ColorScheme) bool {
+func handleDeleteUser(writer modules.Writer, keyReader modules.KeyReader, db *database.DB, colorScheme menu.ColorScheme) bool {
 	writer.Write([]byte(menu.ClearScreen))
 
 	header := colorScheme.Colorize("--- Delete User Account ---", "primary")
@@ -189,7 +190,7 @@ func handleDeleteUser(writer Writer, keyReader KeyReader, db *database.DB, color
 }
 
 // handleViewUsers displays all users
-func handleViewUsers(writer Writer, keyReader KeyReader, db *database.DB, colorScheme menu.ColorScheme) bool {
+func handleViewUsers(writer modules.Writer, keyReader modules.KeyReader, db *database.DB, colorScheme menu.ColorScheme) bool {
 	writer.Write([]byte(menu.ClearScreen))
 
 	header := colorScheme.Colorize("--- All Users ---", "primary")
@@ -236,7 +237,7 @@ func handleViewUsers(writer Writer, keyReader KeyReader, db *database.DB, colorS
 }
 
 // handleChangePassword changes a user's password
-func handleChangePassword(writer Writer, keyReader KeyReader, db *database.DB, colorScheme menu.ColorScheme) bool {
+func handleChangePassword(writer modules.Writer, keyReader modules.KeyReader, db *database.DB, colorScheme menu.ColorScheme) bool {
 	writer.Write([]byte(menu.ClearScreen))
 
 	header := colorScheme.Colorize("--- Change User Password ---", "primary")
@@ -278,7 +279,7 @@ func handleChangePassword(writer Writer, keyReader KeyReader, db *database.DB, c
 }
 
 // handleToggleUserStatus toggles a user's active status
-func handleToggleUserStatus(writer Writer, keyReader KeyReader, db *database.DB, colorScheme menu.ColorScheme) bool {
+func handleToggleUserStatus(writer modules.Writer, keyReader modules.KeyReader, db *database.DB, colorScheme menu.ColorScheme) bool {
 	writer.Write([]byte(menu.ClearScreen))
 
 	header := colorScheme.Colorize("--- Toggle User Status ---", "primary")
@@ -318,7 +319,7 @@ func handleToggleUserStatus(writer Writer, keyReader KeyReader, db *database.DB,
 }
 
 // handleSystemStats displays system statistics
-func handleSystemStats(writer Writer, keyReader KeyReader, db *database.DB, colorScheme menu.ColorScheme) bool {
+func handleSystemStats(writer modules.Writer, keyReader modules.KeyReader, db *database.DB, colorScheme menu.ColorScheme) bool {
 	writer.Write([]byte(menu.ClearScreen))
 
 	header := colorScheme.Colorize("--- System Statistics ---", "primary")
@@ -378,7 +379,7 @@ func handleSystemStats(writer Writer, keyReader KeyReader, db *database.DB, colo
 }
 
 // handleBulletinManagement manages bulletins (placeholder for now)
-func handleBulletinManagement(writer Writer, keyReader KeyReader, db *database.DB, colorScheme menu.ColorScheme) bool {
+func handleBulletinManagement(writer modules.Writer, keyReader modules.KeyReader, db *database.DB, colorScheme menu.ColorScheme) bool {
 	showMessage(writer, keyReader, colorScheme, "Bulletin Management - Not yet implemented", "secondary")
 	return true
 }
@@ -386,7 +387,7 @@ func handleBulletinManagement(writer Writer, keyReader KeyReader, db *database.D
 // Helper functions
 
 // readLine reads a line of input from the user
-func readLine(keyReader KeyReader, writer Writer) (string, error) {
+func readLine(keyReader modules.KeyReader, writer modules.Writer) (string, error) {
 	var line strings.Builder
 	for {
 		key, err := keyReader.ReadKey()
@@ -429,7 +430,7 @@ func parseAccessLevel(s string) (int, error) {
 }
 
 // showMessage displays a message and waits for user input
-func showMessage(writer Writer, keyReader KeyReader, colorScheme menu.ColorScheme, message, messageType string) {
+func showMessage(writer modules.Writer, keyReader modules.KeyReader, colorScheme menu.ColorScheme, message, messageType string) {
 	writer.Write([]byte(menu.ClearScreen))
 
 	coloredMessage := colorScheme.Colorize(message, messageType)

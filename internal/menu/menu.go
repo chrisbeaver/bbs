@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"bbs/internal/config"
+	"bbs/internal/modules"
 )
 
 // ColorScheme interface for menu rendering
@@ -19,9 +20,7 @@ type ColorScheme interface {
 }
 
 // Writer interface for output
-type Writer interface {
-	Write([]byte) (int, error)
-}
+type Writer = modules.Writer
 
 // MenuProvider interface for modules that provide menu items
 type MenuProvider interface {
