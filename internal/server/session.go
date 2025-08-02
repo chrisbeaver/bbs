@@ -453,19 +453,17 @@ func (s *Session) executeCommand(item *config.MenuItem) bool {
 		keyReader := &TerminalKeyReader{session: s}
 		bulletinsModule.Execute(s.writer, keyReader)
 		return true
-	case "sysop", "sysop_menu":
+	case "sysop_menu":
 		// Check if user has sysop access
 		if s.user == nil || s.user.AccessLevel < 255 {
 			s.write([]byte(s.colorScheme.Colorize("Access denied. Sysop privileges required.", "error") + "\n"))
 			s.waitForKey()
 			return true
 		}
-		// Handle sysop menu as a regular submenu
-		if len(item.Submenu) > 0 {
-			s.menuHistory = append(s.menuHistory, s.currentMenu)
-			s.currentMenu = item.ID
-			s.selectedIndex = 0
-		}
+		// Navigate to sysop_menu submenu
+		s.menuHistory = append(s.menuHistory, s.currentMenu)
+		s.currentMenu = "sysop_menu"
+		s.selectedIndex = 0
 		return true
 	// Sysop command handlers
 	case "create_user":
