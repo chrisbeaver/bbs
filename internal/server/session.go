@@ -169,16 +169,20 @@ func (s *Session) initializeStatusBar() {
 	// Create status bar manager
 	s.statusBar = statusbar.NewManager(s.user.Username, s.config, height)
 
-	// Start status bar updates every second
+	// Start status bar updates every second, but don't handle them here
+	// The TerminalWriter will handle status bar positioning automatically
 	statusUpdates := s.statusBar.Start(time.Second)
 
-	// Handle status bar updates in a goroutine
+	// Consume the updates but don't write them - TerminalWriter handles this
 	go func() {
-		for statusBar := range statusUpdates {
-			// Write status bar to terminal
-			s.write([]byte(statusBar))
+		for range statusUpdates {
+			// Status bar updates are now handled automatically by TerminalWriter
+			// when screen clears are detected, so we don't need to write them here
 		}
 	}()
+
+	// Do an initial status bar draw to position it correctly
+	s.ensureStatusBar()
 }
 
 // stopStatusBar stops and clears the status bar

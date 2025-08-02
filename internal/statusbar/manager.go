@@ -130,6 +130,13 @@ func (m *Manager) RenderAtPosition(terminalHeight int) string {
 	return positionCode + statusBarContent
 }
 
+// RenderContent returns just the status bar content without positioning
+func (m *Manager) RenderContent() string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.statusBar.Render()
+}
+
 // getTimerUpdate returns just a timer update without repositioning the entire status bar
 func (m *Manager) getTimerUpdate() string {
 	if !m.isInitialized {

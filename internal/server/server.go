@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/crypto/ssh"
@@ -86,7 +87,11 @@ func (s *Server) NewSession(term terminal.Terminal, prefilledUsername string) *S
 	}
 
 	// Initialize the TerminalWriter for this session
-	session.writer = &TerminalWriter{session: session}
+	session.writer = &TerminalWriter{
+		session:             session,
+		lastStatusBarRedraw: time.Time{}, // Initialize to zero time
+		pendingRedraw:       false,
+	}
 
 	// Initialize the MenuRenderer
 	session.menuRenderer = menu.NewMenuRenderer(s.colorScheme, session.writer)
@@ -171,7 +176,10 @@ func (s *Server) handleSSHSession(session *Session, channel ssh.Channel, request
 
 // TerminalWriter adapts session to Writer interface for modules
 type TerminalWriter struct {
-	session *Session
+	session              *Session
+	lastStatusBarRedraw  time.Time
+	statusBarRedrawMutex sync.Mutex
+	pendingRedraw        bool
 }
 
 func (w *TerminalWriter) Write(data []byte) (int, error) {
@@ -206,31 +214,66 @@ func (w *TerminalWriter) handleStatusBarRedraw(data []byte) {
 
 	// Check if screen was cleared (full screen clear or content area clear) and we have a status bar
 	if (strings.Contains(dataStr, "\033[2J") || strings.Contains(dataStr, "\033[H\033[0J")) && w.session.statusBar != nil {
-		// Use a small delay to avoid flickering from rapid screen clears
-		go func() {
-			// Small delay to let any following writes complete
-			time.Sleep(20 * time.Millisecond)
+		w.statusBarRedrawMutex.Lock()
+		defer w.statusBarRedrawMutex.Unlock()
 
-			// Get terminal height for proper positioning
-			_, height, err := w.session.terminal.Size()
-			if err != nil {
-				height = 24 // Default height
+		// Debounce rapid screen clears - only allow one redraw per 100ms
+		now := time.Now()
+		if now.Sub(w.lastStatusBarRedraw) < 100*time.Millisecond {
+			// If there's already a pending redraw or recent redraw, skip this one
+			if !w.pendingRedraw {
+				w.pendingRedraw = true
+				// Schedule a delayed redraw
+				go func() {
+					time.Sleep(100 * time.Millisecond)
+					w.statusBarRedrawMutex.Lock()
+					w.pendingRedraw = false
+					w.lastStatusBarRedraw = time.Now()
+					w.statusBarRedrawMutex.Unlock()
+					w.doStatusBarRedraw()
+				}()
 			}
+			return
+		}
 
-			// Redraw status bar at bottom of screen
-			statusBarOutput := w.session.statusBar.RenderAtPosition(height)
+		// Immediate redraw if enough time has passed
+		w.lastStatusBarRedraw = now
+		w.doStatusBarRedraw()
+	}
+}
 
-			// Write status bar directly to terminal (avoid recursion)
-			if sshTerm, ok := w.session.terminal.(*terminal.SSHTerminal); ok {
-				terminalInstance := sshTerm.GetTerminal()
-				terminalInstance.Write([]byte(statusBarOutput))
-			} else if localTerm, ok := w.session.terminal.(*terminal.LocalTerminal); ok {
-				terminalInstance := localTerm.GetTerminal()
-				terminalInstance.Write([]byte(statusBarOutput))
-			} else {
-				w.session.terminal.Write([]byte(statusBarOutput))
-			}
-		}()
+// doStatusBarRedraw performs the actual status bar redraw
+func (w *TerminalWriter) doStatusBarRedraw() {
+	// Get terminal height for proper positioning
+	_, height, err := w.session.terminal.Size()
+	if err != nil {
+		height = 24 // Default height
+	}
+
+	// Save current cursor position
+	saveCursor := "\033[s"
+
+	// Position cursor at bottom line and clear the line
+	positionCode := fmt.Sprintf("\033[%d;1H\033[2K", height)
+
+	// Get status bar content without positioning
+	statusBarContent := w.session.statusBar.RenderContent()
+
+	// Restore cursor position
+	restoreCursor := "\033[u"
+
+	// Combine all the positioning and content
+	statusBarOutput := saveCursor + positionCode + statusBarContent + restoreCursor
+
+	// Write status bar directly to terminal (avoid recursion)
+	if sshTerm, ok := w.session.terminal.(*terminal.SSHTerminal); ok {
+		terminalInstance := sshTerm.GetTerminal()
+		terminalInstance.Write([]byte(statusBarOutput))
+	} else if localTerm, ok := w.session.terminal.(*terminal.LocalTerminal); ok {
+		terminalInstance := localTerm.GetTerminal()
+		terminalInstance.Write([]byte(statusBarOutput))
+	} else {
+		w.session.terminal.Write([]byte(statusBarOutput))
 	}
 }
 
