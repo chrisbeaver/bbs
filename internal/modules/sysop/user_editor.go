@@ -7,6 +7,7 @@ import (
 
 	"golang.org/x/term"
 
+	"bbs/internal/components"
 	"bbs/internal/database"
 )
 
@@ -156,86 +157,184 @@ func (ue *UserEditor) ListUsers(term *term.Terminal) {
 	ue.showMessage(term, "\nPress any key to continue...", "text")
 }
 
-// CreateUser creates a new user
+// CreateUser creates a new user using form components
 func (ue *UserEditor) CreateUser(term *term.Terminal) {
-	term.Write([]byte(ClearScreen + ShowCursor))
+	// Create the form
+	form := components.NewForm(components.FormConfig{
+		Title: "Create New User",
+		Width: 79,
+	}, ue.colorScheme)
 
-	term.Write([]byte(ue.colorScheme.Colorize("Create New User\n\n", "primary")))
+	// Add username field
+	usernameField := components.NewTextInput(components.TextInputConfig{
+		Name:        "username",
+		Label:       "Username",
+		Placeholder: "Enter username...",
+		MaxLength:   32,
+		Required:    true,
+		Width:       40,
+		Validator: func(value string) error {
+			trimmed := strings.TrimSpace(value)
+			if len(trimmed) < 3 {
+				return fmt.Errorf("username must be at least 3 characters")
+			}
+			// Check if user already exists
+			existingUser, _ := ue.db.GetUser(trimmed)
+			if existingUser != nil {
+				return fmt.Errorf("user already exists")
+			}
+			return nil
+		},
+	}, ue.colorScheme)
 
-	// Get username
-	term.Write([]byte(ue.colorScheme.Colorize("Enter username: ", "text")))
-	username, err := term.ReadLine()
-	if err != nil {
-		return
+	// Add password field
+	passwordField := components.NewTextInput(components.TextInputConfig{
+		Name:        "password",
+		Label:       "Password",
+		Placeholder: "Enter password...",
+		MaxLength:   64,
+		Required:    true,
+		Width:       40,
+		Validator: func(value string) error {
+			if len(strings.TrimSpace(value)) < 6 {
+				return fmt.Errorf("password must be at least 6 characters")
+			}
+			return nil
+		},
+	}, ue.colorScheme)
+
+	// Add real name field
+	realNameField := components.NewTextInput(components.TextInputConfig{
+		Name:        "real_name",
+		Label:       "Real Name",
+		Placeholder: "Enter real name (optional)...",
+		MaxLength:   64,
+		Required:    false,
+		Width:       40,
+	}, ue.colorScheme)
+
+	// Add email field
+	emailField := components.NewTextInput(components.TextInputConfig{
+		Name:        "email",
+		Label:       "Email",
+		Placeholder: "Enter email (optional)...",
+		MaxLength:   128,
+		Required:    false,
+		Width:       40,
+	}, ue.colorScheme)
+
+	// Add access level field
+	accessLevelField := components.NewTextInput(components.TextInputConfig{
+		Name:        "access_level",
+		Label:       "Access Level",
+		Placeholder: "0-255",
+		Value:       "0", // Default to 0
+		MaxLength:   3,
+		Required:    true,
+		Width:       40,
+		Validator: func(value string) error {
+			accessLevel, err := strconv.Atoi(strings.TrimSpace(value))
+			if err != nil || accessLevel < 0 || accessLevel > 255 {
+				return fmt.Errorf("access level must be 0-255")
+			}
+			return nil
+		},
+	}, ue.colorScheme)
+
+	// Add components to form
+	form.AddComponent(usernameField)
+	form.AddComponent(passwordField)
+	form.AddComponent(realNameField)
+	form.AddComponent(emailField)
+	form.AddComponent(accessLevelField)
+
+	// Start form interaction
+	form.Start()
+
+	// Simple character input loop
+	for {
+		// Render form
+		term.Write([]byte(form.Render()))
+
+		// Read single character input using a simple approach
+		term.Write([]byte("\n" + ue.colorScheme.Colorize("Controls: [t]ab, [c]lear, [b]ackspace, [s]ubmit, [q]uit, or type text: ", "secondary")))
+		input, err := term.ReadLine()
+		if err != nil {
+			break
+		}
+
+		input = strings.TrimSpace(input)
+
+		// Handle special commands first
+		if len(input) == 1 {
+			switch strings.ToLower(input) {
+			case "t":
+				form.HandleKey('\t')
+				continue
+			case "b":
+				form.HandleKey('\b')
+				continue
+			case "s":
+				form.HandleKey('\r')
+			case "q":
+				form.HandleKey(27)
+			default:
+				// Single character input to focused field
+				form.HandleKey(rune(input[0]))
+				continue
+			}
+		} else if input == "" {
+			// Empty input = submit
+			form.HandleKey('\r')
+		} else {
+			// Multi-character input - add each character to focused field
+			for _, char := range input {
+				form.HandleKey(char)
+			}
+			continue
+		}
+
+		// Check form state
+		if form.IsSubmitted() {
+			errors := form.Validate()
+			if len(errors) == 0 {
+				// Form is valid, create user
+				values := form.GetStringValues()
+				accessLevel, _ := strconv.Atoi(values["access_level"])
+
+				user := &database.User{
+					Username:    strings.TrimSpace(values["username"]),
+					Password:    strings.TrimSpace(values["password"]), // TODO: Hash password
+					RealName:    strings.TrimSpace(values["real_name"]),
+					Email:       strings.TrimSpace(values["email"]),
+					AccessLevel: accessLevel,
+					IsActive:    true,
+				}
+
+				if err := ue.db.CreateUser(user); err != nil {
+					ue.showMessage(term, "Error creating user: "+err.Error(), "error")
+				} else {
+					ue.showMessage(term, "User created successfully!", "success")
+				}
+				break
+			} else {
+				// Show validation errors
+				errorMsg := "Validation errors:\n"
+				for _, err := range errors {
+					errorMsg += "• " + err.Error() + "\n"
+				}
+				ue.showMessage(term, errorMsg, "error")
+				form.Reset()
+				form.Start()
+			}
+		}
+
+		if form.IsCancelled() {
+			break
+		}
 	}
 
-	if strings.TrimSpace(username) == "" {
-		ue.showMessage(term, "Username cannot be empty.", "error")
-		return
-	}
-
-	// Check if user already exists
-	existingUser, _ := ue.db.GetUser(strings.TrimSpace(username))
-	if existingUser != nil {
-		ue.showMessage(term, "User already exists.", "error")
-		return
-	}
-
-	// Get password
-	term.Write([]byte(ue.colorScheme.Colorize("Enter password: ", "text")))
-	password, err := term.ReadLine()
-	if err != nil {
-		return
-	}
-
-	if strings.TrimSpace(password) == "" {
-		ue.showMessage(term, "Password cannot be empty.", "error")
-		return
-	}
-
-	// Get real name
-	term.Write([]byte(ue.colorScheme.Colorize("Enter real name: ", "text")))
-	realName, err := term.ReadLine()
-	if err != nil {
-		return
-	}
-
-	// Get email
-	term.Write([]byte(ue.colorScheme.Colorize("Enter email: ", "text")))
-	email, err := term.ReadLine()
-	if err != nil {
-		return
-	}
-
-	// Get access level
-	term.Write([]byte(ue.colorScheme.Colorize("Enter access level (0-255): ", "text")))
-	accessLevelStr, err := term.ReadLine()
-	if err != nil {
-		return
-	}
-
-	accessLevel, err := strconv.Atoi(strings.TrimSpace(accessLevelStr))
-	if err != nil || accessLevel < 0 || accessLevel > 255 {
-		ue.showMessage(term, "Invalid access level. Must be 0-255.", "error")
-		return
-	}
-
-	// Create user
-	user := &database.User{
-		Username:    strings.TrimSpace(username),
-		Password:    strings.TrimSpace(password),
-		RealName:    strings.TrimSpace(realName),
-		Email:       strings.TrimSpace(email),
-		AccessLevel: accessLevel,
-		IsActive:    true,
-	}
-
-	err = ue.db.CreateUser(user)
-	if err != nil {
-		ue.showMessage(term, "Error creating user: "+err.Error(), "error")
-	} else {
-		ue.showMessage(term, "User created successfully!", "success")
-	}
+	form.Reset()
 }
 
 // EditUser edits an existing user

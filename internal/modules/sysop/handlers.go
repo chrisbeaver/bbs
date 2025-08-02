@@ -6,73 +6,202 @@ import (
 	"strings"
 	"time"
 
+	"bbs/internal/components"
 	"bbs/internal/database"
 	"bbs/internal/menu"
 	"bbs/internal/modules"
 )
 
-// handleCreateUser creates a new user account
+// ComponentColorSchemeAdapter adapts menu.ColorScheme to components.ColorScheme
+type ComponentColorSchemeAdapter struct {
+	colorScheme menu.ColorScheme
+}
+
+func (a *ComponentColorSchemeAdapter) Colorize(text, colorName string) string {
+	return a.colorScheme.Colorize(text, colorName)
+}
+
+func (a *ComponentColorSchemeAdapter) ColorizeWithBg(text, fgColor, bgColor string) string {
+	return a.colorScheme.ColorizeWithBg(text, fgColor, bgColor)
+}
+
+func (a *ComponentColorSchemeAdapter) CenterText(text string, terminalWidth int) string {
+	return a.colorScheme.CenterText(text, terminalWidth)
+}
+
+func (a *ComponentColorSchemeAdapter) DrawSeparator(width int, char string) string {
+	return a.colorScheme.DrawSeparator(width, char)
+}
+
+// handleCreateUser creates a new user account using form components
 func handleCreateUser(writer modules.Writer, keyReader modules.KeyReader, db *database.DB, colorScheme menu.ColorScheme) bool {
-	writer.Write([]byte(menu.ClearScreen))
+	// Create a ColorScheme adapter for components
+	componentColorScheme := &ComponentColorSchemeAdapter{colorScheme: colorScheme}
 
-	header := colorScheme.Colorize("--- Create New User ---", "primary")
-	centeredHeader := colorScheme.CenterText(header, 79)
-	writer.Write([]byte(centeredHeader + "\n\n"))
+	// Create the form
+	form := components.NewForm(components.FormConfig{
+		Title: "Create New User",
+		Width: 79,
+	}, componentColorScheme)
 
-	// Get username
-	writer.Write([]byte(colorScheme.Colorize("Enter username: ", "text")))
-	username, err := readLine(keyReader, writer)
-	if err != nil || strings.TrimSpace(username) == "" {
-		showMessage(writer, keyReader, colorScheme, "Operation cancelled.", "error")
-		return true
-	}
+	// Add username field
+	usernameField := components.NewTextInput(components.TextInputConfig{
+		Name:        "username",
+		Label:       "Username",
+		Placeholder: "Enter username...",
+		MaxLength:   32,
+		Required:    true,
+		Width:       40,
+		Validator: func(value string) error {
+			trimmed := strings.TrimSpace(value)
+			if len(trimmed) < 3 {
+				return fmt.Errorf("username must be at least 3 characters")
+			}
+			// Check if user already exists
+			if _, err := db.GetUser(trimmed); err == nil {
+				return fmt.Errorf("user already exists")
+			}
+			return nil
+		},
+	}, componentColorScheme)
 
-	// Check if user exists
-	if _, err := db.GetUser(username); err == nil {
-		showMessage(writer, keyReader, colorScheme, "User already exists!", "error")
-		return true
-	}
+	// Add password field
+	passwordField := components.NewTextInput(components.TextInputConfig{
+		Name:        "password",
+		Label:       "Password",
+		Placeholder: "Enter password...",
+		MaxLength:   64,
+		Required:    true,
+		Width:       40,
+		Validator: func(value string) error {
+			if len(strings.TrimSpace(value)) < 6 {
+				return fmt.Errorf("password must be at least 6 characters")
+			}
+			return nil
+		},
+	}, componentColorScheme)
 
-	// Get password
-	writer.Write([]byte(colorScheme.Colorize("Enter password: ", "text")))
-	password, err := readLine(keyReader, writer)
-	if err != nil || strings.TrimSpace(password) == "" {
-		showMessage(writer, keyReader, colorScheme, "Operation cancelled.", "error")
-		return true
-	}
+	// Add real name field
+	realNameField := components.NewTextInput(components.TextInputConfig{
+		Name:        "real_name",
+		Label:       "Real Name",
+		Placeholder: "Enter real name (optional)...",
+		MaxLength:   64,
+		Required:    false,
+		Width:       40,
+	}, componentColorScheme)
 
-	// Get access level
-	writer.Write([]byte(colorScheme.Colorize("Enter access level (0-255, default 10): ", "text")))
-	accessLevelStr, err := readLine(keyReader, writer)
-	if err != nil {
-		showMessage(writer, keyReader, colorScheme, "Operation cancelled.", "error")
-		return true
-	}
+	// Add email field
+	emailField := components.NewTextInput(components.TextInputConfig{
+		Name:        "email",
+		Label:       "Email",
+		Placeholder: "Enter email (optional)...",
+		MaxLength:   128,
+		Required:    false,
+		Width:       40,
+	}, componentColorScheme)
 
-	accessLevel := 10 // Default access level
-	if strings.TrimSpace(accessLevelStr) != "" {
-		if level, err := parseAccessLevel(accessLevelStr); err == nil {
-			accessLevel = level
-		} else {
-			showMessage(writer, keyReader, colorScheme, "Invalid access level, using default (10).", "secondary")
+	// Add access level field
+	accessLevelField := components.NewTextInput(components.TextInputConfig{
+		Name:        "access_level",
+		Label:       "Access Level",
+		Placeholder: "0-255",
+		Value:       "10", // Default to 10 like the original
+		MaxLength:   3,
+		Required:    true,
+		Width:       40,
+		Validator: func(value string) error {
+			accessLevel, err := strconv.Atoi(strings.TrimSpace(value))
+			if err != nil || accessLevel < 0 || accessLevel > 255 {
+				return fmt.Errorf("access level must be 0-255")
+			}
+			return nil
+		},
+	}, componentColorScheme)
+
+	// Add components to form
+	form.AddComponent(usernameField)
+	form.AddComponent(passwordField)
+	form.AddComponent(realNameField)
+	form.AddComponent(emailField)
+	form.AddComponent(accessLevelField)
+
+	// Start form interaction
+	form.Start()
+
+	// Interactive form loop
+	for {
+		// Render form
+		writer.Write([]byte(form.Render()))
+
+		// Read single character input
+		keyStr, err := keyReader.ReadKey()
+		if err != nil {
+			break
+		}
+
+		// Convert special key names to runes
+		var char rune
+		switch keyStr {
+		case "enter":
+			char = '\r'
+		case "escape":
+			char = 27
+		case "quit", "goodbye":
+			char = 27
+		default:
+			// Regular character
+			if len(keyStr) > 0 {
+				char = rune(keyStr[0])
+			} else {
+				continue
+			}
+		}
+
+		// Handle the key
+		form.HandleKey(char)
+
+		// Check form state
+		if form.IsSubmitted() {
+			errors := form.Validate()
+			if len(errors) == 0 {
+				// Form is valid, create user
+				values := form.GetStringValues()
+				accessLevel, _ := strconv.Atoi(values["access_level"])
+
+				user := &database.User{
+					Username:    strings.TrimSpace(values["username"]),
+					Password:    strings.TrimSpace(values["password"]), // TODO: Hash password
+					RealName:    strings.TrimSpace(values["real_name"]),
+					Email:       strings.TrimSpace(values["email"]),
+					AccessLevel: accessLevel,
+					IsActive:    true,
+					CreatedAt:   time.Now(),
+				}
+
+				if err := db.CreateUser(user); err != nil {
+					showMessage(writer, keyReader, colorScheme, "Error creating user: "+err.Error(), "error")
+				} else {
+					showMessage(writer, keyReader, colorScheme, "User created successfully!", "success")
+				}
+				return true
+			} else {
+				// Show validation errors
+				errorMsg := "Validation errors:\n"
+				for _, err := range errors {
+					errorMsg += "• " + err.Error() + "\n"
+				}
+				showMessage(writer, keyReader, colorScheme, errorMsg, "error")
+				form.Reset()
+				form.Start()
+			}
+		}
+
+		if form.IsCancelled() {
+			return true
 		}
 	}
 
-	// Create user
-	user := &database.User{
-		Username:    strings.TrimSpace(username),
-		Password:    strings.TrimSpace(password), // TODO: Hash password
-		AccessLevel: accessLevel,
-		IsActive:    true,
-		CreatedAt:   time.Now(),
-	}
-
-	if err := db.CreateUser(user); err != nil {
-		showMessage(writer, keyReader, colorScheme, "Failed to create user: "+err.Error(), "error")
-		return true
-	}
-
-	showMessage(writer, keyReader, colorScheme, "User created successfully!", "primary")
 	return true
 }
 
