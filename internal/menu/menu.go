@@ -45,9 +45,10 @@ type MenuRenderer struct {
 
 // Screen control constants
 const (
-	ClearScreen = "\033[2J\033[H"
-	HideCursor  = "\033[?25l"
-	ShowCursor  = "\033[?25h"
+	ClearScreen      = "\033[2J\033[H"
+	ClearContentArea = "\033[H\033[0J" // Home cursor and clear from cursor to end of screen
+	HideCursor       = "\033[?25l"
+	ShowCursor       = "\033[?25h"
 )
 
 // NewMenuRenderer creates a new menu renderer
@@ -92,8 +93,8 @@ func (r *MenuRenderer) RenderModuleMenu(provider MenuProvider, selectedIndex int
 
 // renderMenu is the unified rendering method
 func (r *MenuRenderer) renderMenu(title string, items []MenuItem, selectedIndex int, instructions string) {
-	// Clear screen and hide cursor
-	r.writer.Write([]byte(ClearScreen + HideCursor))
+	// Clear content area only (respects scroll region) and hide cursor
+	r.writer.Write([]byte(ClearContentArea + HideCursor))
 
 	// Menu title with color and centering
 	coloredTitle := r.colorScheme.Colorize(title, "primary")

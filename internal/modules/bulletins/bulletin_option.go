@@ -42,7 +42,7 @@ func (b *BulletinOption) GetDescription() string {
 
 // Execute implements MenuOption interface
 func (b *BulletinOption) Execute(writer modules.Writer, keyReader modules.KeyReader, db *database.DB, colorScheme menu.ColorScheme) bool {
-	writer.Write([]byte(menu.ClearScreen))
+	writer.Write([]byte(menu.ClearContentArea))
 
 	// Header with bulletin title
 	header := fmt.Sprintf("--- %s ---", b.bulletin.Title)

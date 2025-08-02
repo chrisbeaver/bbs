@@ -8,23 +8,26 @@ import (
 	"bbs/internal/config"
 )
 
-// StatusBar represents a terminal status bar
+// StatusBar represents a terminal status bar that stays fixed
 type StatusBar struct {
-	username   string
-	systemName string
-	startTime  time.Time
-	width      int
-	isActive   bool
+	username      string
+	systemName    string
+	startTime     time.Time
+	width         int
+	height        int
+	isActive      bool
+	isInitialized bool
 }
 
 // New creates a new status bar instance
 func New(username string, cfg *config.Config) *StatusBar {
 	return &StatusBar{
-		username:   username,
-		systemName: cfg.BBS.SystemName,
-		startTime:  time.Now(),
-		width:      cfg.BBS.MaxLineLength,
-		isActive:   true,
+		username:      username,
+		systemName:    cfg.BBS.SystemName,
+		startTime:     time.Now(),
+		width:         cfg.BBS.MaxLineLength,
+		isActive:      true,
+		isInitialized: false,
 	}
 }
 
@@ -79,6 +82,29 @@ func (sb *StatusBar) Render() string {
 	return statusBar
 }
 
+// InitializeFixed sets up the status bar with scroll region protection
+func (sb *StatusBar) InitializeFixed(terminalHeight int) string {
+	sb.height = terminalHeight
+	sb.isInitialized = true
+
+	// Position cursor at status bar line and render status bar
+	positionCode := fmt.Sprintf("\033[%d;1H", terminalHeight)
+	statusBarContent := sb.Render()
+
+	// Position cursor back to top of content area
+	cursorToTop := "\033[1;1H"
+
+	return positionCode + statusBarContent + cursorToTop
+}
+
+// GetContentHeight returns usable screen height (excluding status bar)
+func (sb *StatusBar) GetContentHeight() int {
+	if !sb.isInitialized || !sb.isActive {
+		return sb.height
+	}
+	return sb.height - 1
+}
+
 // GetPositionCode returns the ANSI escape code to position cursor at bottom of screen
 func (sb *StatusBar) GetPositionCode(terminalHeight int) string {
 	return fmt.Sprintf("\033[%d;1H", terminalHeight)
@@ -94,9 +120,36 @@ func (sb *StatusBar) SetActive(active bool) {
 	sb.isActive = active
 }
 
+// GetStartTime returns the start time for duration calculations
+func (sb *StatusBar) GetStartTime() time.Time {
+	return sb.startTime
+}
+
+// GetWidth returns the width of the status bar
+func (sb *StatusBar) GetWidth() int {
+	return sb.width
+}
+
+// GetTimerString returns just the formatted timer string
+func (sb *StatusBar) GetTimerString() string {
+	duration := time.Since(sb.startTime)
+	return formatDuration(duration)
+}
+
 // Clear returns ANSI codes to clear the status bar area
 func (sb *StatusBar) Clear(terminalHeight int) string {
-	return fmt.Sprintf("\033[%d;1H\033[2K", terminalHeight)
+	if !sb.isInitialized {
+		return ""
+	}
+
+	// Reset scroll region to full screen
+	resetScroll := fmt.Sprintf("\033[1;%dr", terminalHeight)
+
+	// Clear status bar line
+	clearStatus := fmt.Sprintf("\033[%d;1H\033[2K", terminalHeight)
+
+	sb.isInitialized = false
+	return resetScroll + clearStatus
 }
 
 // formatDuration formats a duration into HH:MM:SS format

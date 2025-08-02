@@ -15,6 +15,7 @@ type Manager struct {
 	mu             sync.RWMutex
 	updateTicker   *time.Ticker
 	stopChan       chan bool
+	isInitialized  bool
 }
 
 // NewManager creates a new status bar manager
@@ -23,6 +24,7 @@ func NewManager(username string, cfg *config.Config, terminalHeight int) *Manage
 		statusBar:      New(username, cfg),
 		terminalHeight: terminalHeight,
 		stopChan:       make(chan bool),
+		isInitialized:  false,
 	}
 }
 
@@ -33,25 +35,27 @@ func (m *Manager) Start(updateInterval time.Duration) <-chan string {
 
 	updateChan := make(chan string, 1)
 
-	if m.updateTicker != nil {
-		m.updateTicker.Stop()
-	}
-
-	m.updateTicker = time.NewTicker(updateInterval)
-
 	go func() {
 		defer close(updateChan)
 
-		// Send initial render
-		updateChan <- m.renderStatusBar()
+		// Send initial fixed setup ONLY
+		if !m.isInitialized {
+			statusBar := m.statusBar.InitializeFixed(m.terminalHeight)
+			m.isInitialized = true
+			updateChan <- statusBar
+		}
+
+		// Start timer updates for just the timer portion
+		m.updateTicker = time.NewTicker(updateInterval)
+		defer m.updateTicker.Stop()
 
 		for {
 			select {
 			case <-m.updateTicker.C:
-				select {
-				case updateChan <- m.renderStatusBar():
-				default:
-					// Channel is full, skip this update
+				// Only update the timer portion to avoid flicker
+				timerUpdate := m.getTimerUpdate()
+				if timerUpdate != "" {
+					updateChan <- timerUpdate
 				}
 			case <-m.stopChan:
 				return
@@ -97,6 +101,13 @@ func (m *Manager) SetActive(active bool) {
 	m.statusBar.SetActive(active)
 }
 
+// GetContentHeight returns the available height for content (excluding status bar)
+func (m *Manager) GetContentHeight() int {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.statusBar.GetContentHeight()
+}
+
 // Clear clears the status bar from the terminal
 func (m *Manager) Clear() string {
 	m.mu.RLock()
@@ -104,7 +115,48 @@ func (m *Manager) Clear() string {
 	return m.statusBar.Clear(m.terminalHeight)
 }
 
-// renderStatusBar generates the positioned status bar
+// RenderAtPosition renders the status bar at the specified terminal height
+func (m *Manager) RenderAtPosition(terminalHeight int) string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	// Update terminal height in case it changed
+	m.terminalHeight = terminalHeight
+
+	// Position cursor at status bar line and render status bar
+	positionCode := fmt.Sprintf("\033[%d;1H", terminalHeight)
+	statusBarContent := m.statusBar.Render()
+
+	return positionCode + statusBarContent
+}
+
+// getTimerUpdate returns just a timer update without repositioning the entire status bar
+func (m *Manager) getTimerUpdate() string {
+	if !m.isInitialized {
+		return ""
+	}
+
+	// Get the current timer string
+	durationStr := m.statusBar.GetTimerString()
+
+	// Position cursor at the timer location (right side of status bar line)
+	// The timer format is always "HH:MM:SS " (9 characters including space)
+	timerStartCol := m.statusBar.GetWidth() - 9
+	positionCode := fmt.Sprintf("\033[%d;%dH", m.terminalHeight, timerStartCol)
+
+	// ANSI color codes for timer (bright yellow with blue background to match status bar)
+	blue := "\033[44m"
+	brightYellow := "\033[93m"
+	reset := "\033[0m"
+
+	// Clear the timer area by writing spaces, then reposition and write new timer
+	clearSpaces := "         " // 9 spaces to clear the timer area
+	repositionCode := fmt.Sprintf("\033[%d;%dH", m.terminalHeight, timerStartCol)
+
+	return fmt.Sprintf("%s%s%s%s%s%s%s %s",
+		positionCode, blue, clearSpaces,
+		repositionCode, blue, brightYellow, durationStr, reset)
+} // renderStatusBar generates the positioned status bar
 func (m *Manager) renderStatusBar() string {
 	positionCode := m.statusBar.GetPositionCode(m.terminalHeight)
 	statusBarContent := m.statusBar.Render()

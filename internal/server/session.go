@@ -185,6 +185,21 @@ func (s *Session) stopStatusBar() {
 	}
 }
 
+// redrawStatusBar redraws the status bar to ensure it's visible
+func (s *Session) redrawStatusBar() {
+	if s.statusBar != nil {
+		// Get terminal dimensions
+		_, height, err := s.terminal.Size()
+		if err != nil {
+			height = 24 // Default height if unable to get terminal size
+		}
+
+		// Redraw the status bar at the bottom of the screen
+		statusBarOutput := s.statusBar.RenderAtPosition(height)
+		s.write([]byte(statusBarOutput))
+	}
+}
+
 // displayWelcome displays the welcome message
 func (s *Session) displayWelcome() {
 	banner := s.colorScheme.CreateWelcomeBanner(s.config.BBS.SystemName, s.config.BBS.WelcomeMsg)
@@ -371,6 +386,9 @@ func (s *Session) displayMenu(menu *config.MenuItem) {
 
 	// Use unified menu renderer with access level filtering
 	s.menuRenderer.RenderConfigMenu(menu, s.selectedIndex, userAccessLevel)
+
+	// Redraw status bar after menu to ensure it stays visible
+	s.redrawStatusBar()
 }
 
 // readKey reads a single key press - unified for both SSH and local

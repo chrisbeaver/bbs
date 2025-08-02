@@ -140,7 +140,7 @@ func (m *Module) handleKey(key string, writer modules.Writer, keyReader modules.
 
 // showEmptyMessage displays a message when no items are available
 func (m *Module) showEmptyMessage(writer modules.Writer, keyReader modules.KeyReader) {
-	writer.Write([]byte(menu.ClearScreen))
+	writer.Write([]byte(menu.ClearContentArea))
 	header := m.colorScheme.Colorize("--- "+m.provider.GetMenuTitle()+" ---", "primary")
 	centeredHeader := m.colorScheme.CenterText(header, 79)
 	writer.Write([]byte(centeredHeader + "\n\n"))

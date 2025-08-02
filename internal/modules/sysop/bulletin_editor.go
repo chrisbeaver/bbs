@@ -20,9 +20,10 @@ type ColorScheme interface {
 
 // Screen control constants
 const (
-	ClearScreen = "\033[2J\033[H"
-	HideCursor  = "\033[?25l"
-	ShowCursor  = "\033[?25h"
+	ClearScreen      = "\033[2J\033[H"
+	ClearContentArea = "\033[H\033[J" // Home cursor and clear from cursor to end of scroll region
+	HideCursor       = "\033[?25l"
+	ShowCursor       = "\033[?25h"
 )
 
 // Module implements the sysop bulletin management functionality
@@ -43,7 +44,7 @@ func NewBulletinEditor(db *database.DB, colorScheme ColorScheme) *BulletinEditor
 func (be *BulletinEditor) Execute(term *term.Terminal) bool {
 	for {
 		// Clear screen and show menu
-		term.Write([]byte(ClearScreen + HideCursor))
+		term.Write([]byte(ClearContentArea + HideCursor))
 
 		// Header
 		header := be.colorScheme.Colorize("Sysop Bulletin Editor", "primary")
