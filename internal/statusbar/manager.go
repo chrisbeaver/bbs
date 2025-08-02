@@ -2,6 +2,7 @@ package statusbar
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -146,9 +147,27 @@ func (m *Manager) getTimerUpdate() string {
 	// Get the current timer string
 	durationStr := m.statusBar.GetTimerString()
 
-	// Position cursor at the timer location (right side of status bar line)
-	// The timer format is always "HH:MM:SS " (9 characters including space)
-	timerStartCol := m.statusBar.GetWidth() - 9
+	// Calculate timer position using the same logic as the full render
+	// to ensure consistency and prevent column shifts
+	leftSection := fmt.Sprintf(" %s", m.statusBar.GetUsername())
+	rightSection := fmt.Sprintf("%s ", durationStr)
+	centerSection := m.statusBar.GetSystemName()
+
+	// Calculate padding for center alignment (same as Render method)
+	usedSpace := len(leftSection) + len(rightSection) + len(centerSection)
+	width := m.statusBar.GetWidth()
+	if usedSpace >= width {
+		// Truncate if too long (same logic as Render method)
+		centerSection = m.statusBar.TruncateString(centerSection, width-len(leftSection)-len(rightSection)-2)
+		usedSpace = len(leftSection) + len(rightSection) + len(centerSection)
+	}
+
+	totalPadding := width - usedSpace
+	rightPadding := totalPadding - (totalPadding / 2) // Right padding calculation
+	
+	// Timer starts after: leftSection + leftPadding + centerSection + rightPadding
+	timerStartCol := len(leftSection) + (totalPadding / 2) + len(centerSection) + rightPadding + 1
+
 	positionCode := fmt.Sprintf("\033[%d;%dH", m.terminalHeight, timerStartCol)
 
 	// ANSI color codes for timer (bright yellow with blue background to match status bar)
@@ -157,12 +176,12 @@ func (m *Manager) getTimerUpdate() string {
 	reset := "\033[0m"
 
 	// Clear the timer area by writing spaces, then reposition and write new timer
-	clearSpaces := "         " // 9 spaces to clear the timer area
+	clearSpaces := strings.Repeat(" ", len(rightSection))
 	repositionCode := fmt.Sprintf("\033[%d;%dH", m.terminalHeight, timerStartCol)
 
-	return fmt.Sprintf("%s%s%s%s%s%s%s %s",
+	return fmt.Sprintf("%s%s%s%s%s%s%s%s",
 		positionCode, blue, clearSpaces,
-		repositionCode, blue, brightYellow, durationStr, reset)
+		repositionCode, blue, brightYellow, rightSection, reset)
 } // renderStatusBar generates the positioned status bar
 func (m *Manager) renderStatusBar() string {
 	positionCode := m.statusBar.GetPositionCode(m.terminalHeight)

@@ -130,10 +130,25 @@ func (sb *StatusBar) GetWidth() int {
 	return sb.width
 }
 
+// GetUsername returns the username
+func (sb *StatusBar) GetUsername() string {
+	return sb.username
+}
+
+// GetSystemName returns the system name
+func (sb *StatusBar) GetSystemName() string {
+	return sb.systemName
+}
+
 // GetTimerString returns just the formatted timer string
 func (sb *StatusBar) GetTimerString() string {
 	duration := time.Since(sb.startTime)
 	return formatDuration(duration)
+}
+
+// TruncateString truncates a string to the specified length
+func (sb *StatusBar) TruncateString(s string, maxLen int) string {
+	return truncateString(s, maxLen)
 }
 
 // Clear returns ANSI codes to clear the status bar area
