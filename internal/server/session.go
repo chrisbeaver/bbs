@@ -169,15 +169,23 @@ func (s *Session) initializeStatusBar() {
 	// Create status bar manager
 	s.statusBar = statusbar.NewManager(s.user.Username, s.config, height)
 
-	// Start status bar updates every second, but don't handle them here
-	// The TerminalWriter will handle status bar positioning automatically
+	// Start status bar updates every second
 	statusUpdates := s.statusBar.Start(time.Second)
 
-	// Consume the updates but don't write them - TerminalWriter handles this
+	// Handle timer updates in a goroutine - these are just timer updates, not full redraws
 	go func() {
-		for range statusUpdates {
-			// Status bar updates are now handled automatically by TerminalWriter
-			// when screen clears are detected, so we don't need to write them here
+		for timerUpdate := range statusUpdates {
+			// Write timer updates directly to terminal without going through TerminalWriter
+			// to avoid triggering screen-clear detection
+			if sshTerm, ok := s.terminal.(*terminal.SSHTerminal); ok {
+				terminalInstance := sshTerm.GetTerminal()
+				terminalInstance.Write([]byte(timerUpdate))
+			} else if localTerm, ok := s.terminal.(*terminal.LocalTerminal); ok {
+				terminalInstance := localTerm.GetTerminal()
+				terminalInstance.Write([]byte(timerUpdate))
+			} else {
+				s.terminal.Write([]byte(timerUpdate))
+			}
 		}
 	}()
 
