@@ -3,12 +3,14 @@ package server
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"bbs/internal/config"
 	"bbs/internal/database"
 	"bbs/internal/menu"
 	"bbs/internal/modules/bulletins"
 	"bbs/internal/modules/sysop/user_editor"
+	"bbs/internal/statusbar"
 	"bbs/internal/terminal"
 )
 
@@ -26,11 +28,15 @@ type Session struct {
 	colorScheme       *ColorScheme
 	prefilledUsername string // For SSH connections where username is already known
 	menuRenderer      *menu.MenuRenderer
+	statusBar         *statusbar.Manager
 }
 
 // Run is the unified entry point for all sessions (SSH and local)
 func (s *Session) Run() {
 	defer func() {
+		// Stop and clear status bar
+		s.stopStatusBar()
+
 		if s.terminal != nil {
 			s.terminal.Close()
 		}
@@ -76,6 +82,9 @@ func (s *Session) handleLogin() bool {
 		s.user = user
 		s.authenticated = true
 		s.db.UpdateUserLastCall(s.prefilledUsername)
+
+		// Initialize status bar after successful authentication
+		s.initializeStatusBar()
 
 		s.write([]byte(s.colorScheme.Colorize(fmt.Sprintf("Welcome back, %s!", user.Username), "accent") + "\n"))
 		if user.LastCall != nil {
@@ -127,12 +136,53 @@ func (s *Session) handleLogin() bool {
 		s.authenticated = true
 		s.db.UpdateUserLastCall(username)
 
+		// Initialize status bar after successful authentication
+		s.initializeStatusBar()
+
 		s.write([]byte(s.colorScheme.Colorize(fmt.Sprintf("Welcome, %s!", user.Username), "accent") + "\n\n"))
 		return true
 	}
 
 	s.write([]byte(s.colorScheme.Colorize("Too many failed attempts. Access denied.", "error") + "\n"))
 	return false
+}
+
+// initializeStatusBar creates and starts the status bar for the session
+func (s *Session) initializeStatusBar() {
+	if s.user == nil {
+		return
+	}
+
+	// Get terminal dimensions
+	_, height, err := s.terminal.Size()
+	if err != nil {
+		height = 24 // Default height if unable to get terminal size
+	}
+
+	// Create status bar manager
+	s.statusBar = statusbar.NewManager(s.user.Username, s.config, height)
+
+	// Start status bar updates every second
+	statusUpdates := s.statusBar.Start(time.Second)
+
+	// Handle status bar updates in a goroutine
+	go func() {
+		for statusBar := range statusUpdates {
+			// Write status bar to terminal
+			s.write([]byte(statusBar))
+		}
+	}()
+}
+
+// stopStatusBar stops and clears the status bar
+func (s *Session) stopStatusBar() {
+	if s.statusBar != nil {
+		// Clear the status bar before stopping
+		if clearCode := s.statusBar.Clear(); clearCode != "" {
+			s.write([]byte(clearCode))
+		}
+		s.statusBar.Stop()
+	}
 }
 
 // displayWelcome displays the welcome message
