@@ -42,6 +42,13 @@ func (s *Session) Run() {
 		}
 	}()
 
+	// For local terminals, enable raw mode for proper input handling during login
+	if s.prefilledUsername == "" { // Only for local sessions
+		if err := s.terminal.MakeRaw(); err != nil {
+			s.write([]byte("Warning: Could not set raw mode for input handling\n"))
+		}
+	}
+
 	// Display welcome message
 	s.displayWelcome()
 
@@ -50,7 +57,7 @@ func (s *Session) Run() {
 		return
 	}
 
-	// Switch to raw mode for navigation (only for local terminals that support it)
+	// Ensure raw mode is enabled for navigation (should already be enabled for local)
 	if s.terminal != nil {
 		if err := s.terminal.MakeRaw(); err != nil {
 			s.write([]byte("Warning: Could not set raw mode for navigation\n"))
@@ -209,7 +216,7 @@ func (s *Session) displayWelcome() {
 // readInput reads user input with optional masking (for passwords)
 func (s *Session) readInput(maskInput bool) (string, error) {
 	// Use character-by-character reading for both SSH and local terminals
-	// to ensure consistent non-echoing behavior
+	// to ensure consistent behavior
 	var input string
 	buf := make([]byte, 1)
 
@@ -225,7 +232,7 @@ func (s *Session) readInput(maskInput bool) (string, error) {
 
 		switch buf[0] {
 		case 13, 10: // Enter or newline - finish input
-			s.terminal.Write([]byte("\n"))
+			s.terminal.Write([]byte("\r\n"))
 			return input, nil
 		case 8, 127: // Backspace or DEL
 			if len(input) > 0 {
@@ -241,11 +248,13 @@ func (s *Session) readInput(maskInput bool) (string, error) {
 			// Add character to input
 			if buf[0] >= 32 && buf[0] <= 126 { // Printable ASCII
 				input += string(buf[0])
-				// Don't echo input - let the user type without seeing characters
+				// Echo the character appropriately
 				if maskInput {
 					s.terminal.Write([]byte("*"))
+				} else {
+					// Echo the actual character for non-masked input
+					s.terminal.Write(buf[:1])
 				}
-				// For non-masked input, don't echo anything
 			}
 		}
 	}
