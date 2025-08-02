@@ -3,6 +3,8 @@ package server
 import (
 	"fmt"
 	"net"
+	"strings"
+	"time"
 
 	"golang.org/x/crypto/ssh"
 
@@ -176,17 +178,60 @@ func (w *TerminalWriter) Write(data []byte) (int, error) {
 	// For SSH terminals, use the underlying term.Terminal for proper ANSI handling
 	if sshTerm, ok := w.session.terminal.(*terminal.SSHTerminal); ok {
 		terminalInstance := sshTerm.GetTerminal()
-		return terminalInstance.Write(data)
+		n, err := terminalInstance.Write(data)
+		// After any write, redraw status bar if screen was cleared
+		w.handleStatusBarRedraw(data)
+		return n, err
 	}
 
 	// For local terminals, also use term.Terminal for consistent ANSI processing
 	if localTerm, ok := w.session.terminal.(*terminal.LocalTerminal); ok {
 		terminalInstance := localTerm.GetTerminal()
-		return terminalInstance.Write(data)
+		n, err := terminalInstance.Write(data)
+		// After any write, redraw status bar if screen was cleared
+		w.handleStatusBarRedraw(data)
+		return n, err
 	}
 
 	// Fallback to direct write
-	return w.session.terminal.Write(data)
+	n, err := w.session.terminal.Write(data)
+	// After any write, redraw status bar if screen was cleared
+	w.handleStatusBarRedraw(data)
+	return n, err
+}
+
+// handleStatusBarRedraw checks if screen was cleared and redraws status bar if needed
+func (w *TerminalWriter) handleStatusBarRedraw(data []byte) {
+	dataStr := string(data)
+
+	// Check if screen was cleared (full screen clear or content area clear) and we have a status bar
+	if (strings.Contains(dataStr, "\033[2J") || strings.Contains(dataStr, "\033[H\033[0J")) && w.session.statusBar != nil {
+		// Use a small delay to avoid flickering from rapid screen clears
+		go func() {
+			// Small delay to let any following writes complete
+			time.Sleep(20 * time.Millisecond)
+
+			// Get terminal height for proper positioning
+			_, height, err := w.session.terminal.Size()
+			if err != nil {
+				height = 24 // Default height
+			}
+
+			// Redraw status bar at bottom of screen
+			statusBarOutput := w.session.statusBar.RenderAtPosition(height)
+
+			// Write status bar directly to terminal (avoid recursion)
+			if sshTerm, ok := w.session.terminal.(*terminal.SSHTerminal); ok {
+				terminalInstance := sshTerm.GetTerminal()
+				terminalInstance.Write([]byte(statusBarOutput))
+			} else if localTerm, ok := w.session.terminal.(*terminal.LocalTerminal); ok {
+				terminalInstance := localTerm.GetTerminal()
+				terminalInstance.Write([]byte(statusBarOutput))
+			} else {
+				w.session.terminal.Write([]byte(statusBarOutput))
+			}
+		}()
+	}
 }
 
 // TerminalKeyReader adapts session to KeyReader interface for modules

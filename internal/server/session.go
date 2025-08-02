@@ -192,16 +192,16 @@ func (s *Session) stopStatusBar() {
 	}
 }
 
-// redrawStatusBar redraws the status bar to ensure it's visible
-func (s *Session) redrawStatusBar() {
+// ensureStatusBar ensures the status bar is visible (useful after screen operations)
+func (s *Session) ensureStatusBar() {
 	if s.statusBar != nil {
-		// Get terminal dimensions
+		// Get terminal height for proper positioning
 		_, height, err := s.terminal.Size()
 		if err != nil {
-			height = 24 // Default height if unable to get terminal size
+			height = 24 // Default height
 		}
 
-		// Redraw the status bar at the bottom of the screen
+		// Redraw status bar at bottom of screen
 		statusBarOutput := s.statusBar.RenderAtPosition(height)
 		s.write([]byte(statusBarOutput))
 	}
@@ -396,8 +396,8 @@ func (s *Session) displayMenu(menu *config.MenuItem) {
 	// Use unified menu renderer with access level filtering
 	s.menuRenderer.RenderConfigMenu(menu, s.selectedIndex, userAccessLevel)
 
-	// Redraw status bar after menu to ensure it stays visible
-	s.redrawStatusBar()
+	// Ensure status bar is visible after menu display
+	s.ensureStatusBar()
 }
 
 // readKey reads a single key press - unified for both SSH and local
