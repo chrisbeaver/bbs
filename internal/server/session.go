@@ -8,7 +8,7 @@ import (
 	"bbs/internal/database"
 	"bbs/internal/menu"
 	"bbs/internal/modules/bulletins"
-	"bbs/internal/modules/sysop"
+	"bbs/internal/modules/sysop/user_editor"
 	"bbs/internal/terminal"
 )
 
@@ -460,10 +460,77 @@ func (s *Session) executeCommand(item *config.MenuItem) bool {
 			s.waitForKey()
 			return true
 		}
-
-		sysopModule := sysop.NewModule(s.db, s.colorScheme, s.config)
-		keyReader := &TerminalKeyReader{session: s}
-		sysopModule.Execute(s.writer, keyReader)
+		// Handle sysop menu as a regular submenu
+		if len(item.Submenu) > 0 {
+			s.menuHistory = append(s.menuHistory, s.currentMenu)
+			s.currentMenu = item.ID
+			s.selectedIndex = 0
+		}
+		return true
+	// Sysop command handlers
+	case "create_user":
+		if s.user == nil || s.user.AccessLevel < 255 {
+			s.write([]byte(s.colorScheme.Colorize("Access denied. Sysop privileges required.", "error") + "\n"))
+			s.waitForKey()
+			return true
+		}
+		s.handleSysopCommand("create_user")
+		return true
+	case "edit_user":
+		if s.user == nil || s.user.AccessLevel < 255 {
+			s.write([]byte(s.colorScheme.Colorize("Access denied. Sysop privileges required.", "error") + "\n"))
+			s.waitForKey()
+			return true
+		}
+		s.handleSysopCommand("edit_user")
+		return true
+	case "delete_user":
+		if s.user == nil || s.user.AccessLevel < 255 {
+			s.write([]byte(s.colorScheme.Colorize("Access denied. Sysop privileges required.", "error") + "\n"))
+			s.waitForKey()
+			return true
+		}
+		s.handleSysopCommand("delete_user")
+		return true
+	case "view_users":
+		if s.user == nil || s.user.AccessLevel < 255 {
+			s.write([]byte(s.colorScheme.Colorize("Access denied. Sysop privileges required.", "error") + "\n"))
+			s.waitForKey()
+			return true
+		}
+		s.handleSysopCommand("view_users")
+		return true
+	case "change_password":
+		if s.user == nil || s.user.AccessLevel < 255 {
+			s.write([]byte(s.colorScheme.Colorize("Access denied. Sysop privileges required.", "error") + "\n"))
+			s.waitForKey()
+			return true
+		}
+		s.handleSysopCommand("change_password")
+		return true
+	case "toggle_user":
+		if s.user == nil || s.user.AccessLevel < 255 {
+			s.write([]byte(s.colorScheme.Colorize("Access denied. Sysop privileges required.", "error") + "\n"))
+			s.waitForKey()
+			return true
+		}
+		s.handleSysopCommand("toggle_user")
+		return true
+	case "system_stats":
+		if s.user == nil || s.user.AccessLevel < 255 {
+			s.write([]byte(s.colorScheme.Colorize("Access denied. Sysop privileges required.", "error") + "\n"))
+			s.waitForKey()
+			return true
+		}
+		s.handleSysopCommand("system_stats")
+		return true
+	case "bulletin_management":
+		if s.user == nil || s.user.AccessLevel < 255 {
+			s.write([]byte(s.colorScheme.Colorize("Access denied. Sysop privileges required.", "error") + "\n"))
+			s.waitForKey()
+			return true
+		}
+		s.handleSysopCommand("bulletin_management")
 		return true
 	case "messages":
 		// TODO: Implement messages module
@@ -502,4 +569,91 @@ func (s *Session) waitForKey() {
 		buf := make([]byte, 1)
 		s.terminal.Read(buf)
 	}
+}
+
+// handleSysopCommand executes sysop commands using the user_editor package
+func (s *Session) handleSysopCommand(command string) {
+	// Create user editor instance
+	editor := user_editor.NewUserEditor(s.db, s.colorScheme)
+	keyReader := &TerminalKeyReader{session: s}
+
+	// Map commands to user_editor methods
+	switch command {
+	case "create_user":
+		editor.CreateUser(s.writer, keyReader)
+	case "edit_user":
+		editor.EditUser(s.writer, keyReader)
+	case "delete_user":
+		editor.DeleteUser(s.writer, keyReader)
+	case "view_users":
+		editor.ListUsers(s.writer, keyReader)
+	case "change_password":
+		editor.ChangePassword(s.writer, keyReader)
+	case "toggle_user":
+		editor.ToggleUserStatus(s.writer, keyReader)
+	case "system_stats":
+		s.handleSystemStats()
+	case "bulletin_management":
+		s.write([]byte(s.colorScheme.Colorize("Bulletin Management - Not yet implemented", "secondary") + "\n"))
+		s.waitForKey()
+	default:
+		s.write([]byte(s.colorScheme.Colorize(fmt.Sprintf("Unknown sysop command: %s", command), "error") + "\n"))
+		s.waitForKey()
+	}
+}
+
+// handleSystemStats displays system statistics
+func (s *Session) handleSystemStats() {
+	s.write([]byte(menu.ClearScreen))
+
+	header := s.colorScheme.Colorize("--- System Statistics ---", "primary")
+	centeredHeader := s.colorScheme.CenterText(header, 79)
+	s.write([]byte(centeredHeader + "\n"))
+
+	separator := s.colorScheme.DrawSeparator(len("System Statistics"), "═")
+	centeredSeparator := s.colorScheme.CenterText(separator, 79)
+	s.write([]byte(centeredSeparator + "\n\n"))
+
+	// Get users count
+	users, err := s.db.GetAllUsers(1000)
+	if err != nil {
+		s.write([]byte(s.colorScheme.Colorize("Error retrieving user statistics: "+err.Error(), "error") + "\n"))
+		s.waitForKey()
+		return
+	}
+
+	// Get bulletins count
+	bulletins, err := s.db.GetBulletins(1000)
+	if err != nil {
+		s.write([]byte(s.colorScheme.Colorize("Error retrieving bulletin statistics: "+err.Error(), "error") + "\n"))
+		s.waitForKey()
+		return
+	}
+
+	// Count active users
+	activeUsers := 0
+	totalCalls := 0
+	for _, user := range users {
+		if user.IsActive {
+			activeUsers++
+		}
+		totalCalls += user.TotalCalls
+	}
+
+	// Display statistics
+	stats := []string{
+		"Total Users: " + fmt.Sprintf("%d", len(users)),
+		"Active Users: " + fmt.Sprintf("%d", activeUsers),
+		"Inactive Users: " + fmt.Sprintf("%d", len(users)-activeUsers),
+		"Total Bulletins: " + fmt.Sprintf("%d", len(bulletins)),
+		"Total System Calls: " + fmt.Sprintf("%d", totalCalls),
+	}
+
+	for _, stat := range stats {
+		coloredStat := s.colorScheme.Colorize(stat, "text")
+		centeredStat := s.colorScheme.CenterText(coloredStat, 79)
+		s.write([]byte(centeredStat + "\n"))
+	}
+
+	s.waitForKey()
 }
