@@ -14,11 +14,11 @@ const (
 
 // Pager handles paginated display of long content
 type Pager struct {
-	writer         Writer
-	keyReader      KeyReader
-	terminalSizer  TerminalSizer
-	colorScheme    ColorScheme
-	statusBarMgr   StatusBarManager // Optional: for pausing timer updates
+	writer        Writer
+	keyReader     KeyReader
+	terminalSizer TerminalSizer
+	colorScheme   ColorScheme
+	statusBarMgr  StatusBarManager // Optional: for pausing timer updates
 }
 
 // NewPager creates a new pager instance

@@ -645,7 +645,24 @@ func (s *Session) executeCommand(item *config.MenuItem) bool {
 
 // waitForKey waits for any key press - unified for both SSH and local
 func (s *Session) waitForKey() {
-	s.write([]byte(s.colorScheme.Colorize("\nPress any key to continue...", "text")))
+	// Get terminal height to position prompt safely above status bar
+	_, height, err := s.terminal.Size()
+	if err != nil {
+		height = 24 // Default height
+	}
+
+	// Position prompt much higher to ensure it's safe (height-6 for extra safety)
+	promptLine := height - 6
+	if promptLine < 1 {
+		promptLine = height - 3 // Fallback
+	}
+
+	// Clear the line and position cursor
+	clearLine := "\033[2K" // Clear entire line
+	promptPosition := fmt.Sprintf("\033[%d;1H", promptLine)
+	prompt := s.colorScheme.Colorize("Press any key to continue...", "text")
+	centeredPrompt := s.colorScheme.CenterText(prompt, 79)
+	s.write([]byte(promptPosition + clearLine + centeredPrompt))
 
 	// For both SSH and local, use the unified terminal interface
 	if sshTerm, ok := s.terminal.(*terminal.SSHTerminal); ok {
@@ -656,6 +673,28 @@ func (s *Session) waitForKey() {
 		buf := make([]byte, 1)
 		s.terminal.Read(buf)
 	}
+}
+
+// displaySafeMessage displays a message positioned safely above the status bar
+func (s *Session) displaySafeMessage(message, colorType string) {
+	// Get terminal height to position message safely above status bar
+	_, height, err := s.terminal.Size()
+	if err != nil {
+		height = 24 // Default height
+	}
+
+	// Position message much higher to ensure it's safe (height-8 for extra safety)
+	messageLine := height - 8
+	if messageLine < 1 {
+		messageLine = height - 5 // Fallback
+	}
+
+	// Clear the line and position cursor
+	clearLine := "\033[2K" // Clear entire line
+	messagePosition := fmt.Sprintf("\033[%d;1H", messageLine)
+	coloredMessage := s.colorScheme.Colorize(message, colorType)
+	centeredMessage := s.colorScheme.CenterText(coloredMessage, 79)
+	s.write([]byte(messagePosition + clearLine + centeredMessage))
 }
 
 // handleSysopCommand executes sysop commands using the user_editor package
@@ -681,10 +720,10 @@ func (s *Session) handleSysopCommand(command string) {
 	case "system_stats":
 		s.handleSystemStats()
 	case "bulletin_management":
-		s.write([]byte(s.colorScheme.Colorize("Bulletin Management - Not yet implemented", "secondary") + "\n"))
+		s.displaySafeMessage("Bulletin Management - Not yet implemented", "secondary")
 		s.waitForKey()
 	default:
-		s.write([]byte(s.colorScheme.Colorize(fmt.Sprintf("Unknown sysop command: %s", command), "error") + "\n"))
+		s.displaySafeMessage(fmt.Sprintf("Unknown sysop command: %s", command), "error")
 		s.waitForKey()
 	}
 }
