@@ -7,6 +7,7 @@ import (
 	"bbs/internal/database"
 	"bbs/internal/menu"
 	"bbs/internal/modules"
+	"bbs/internal/pager"
 )
 
 // BulletinOption represents a bulletin menu option
@@ -42,81 +43,56 @@ func (b *BulletinOption) GetDescription() string {
 
 // Execute implements MenuOption interface
 func (b *BulletinOption) Execute(writer modules.Writer, keyReader modules.KeyReader, db *database.DB, colorScheme menu.ColorScheme) bool {
-	// Available screen height accounting for status bar
-	// Using 20 lines for content to be safe (typical 24 line terminal - status bar - headers - prompts)
-	const maxContentLines = 18
-
-	// Prepare bulletin content
+	// Prepare bulletin content lines
 	bodyLines := wrapText(b.bulletin.Body, 75)
 
-	// Header lines (4 lines total: title, separator, info, blank)
-	headerLines := 4
+	// Build complete content with header and body
+	var contentLines []string
 
-	// Calculate total pages needed
-	availableBodyLines := maxContentLines - headerLines - 1 // -1 for prompt line
-	totalPages := (len(bodyLines) + availableBodyLines - 1) / availableBodyLines
-	if totalPages < 1 {
-		totalPages = 1
-	}
+	// Author and date info
+	info := fmt.Sprintf("By: %s | Date: %s", b.bulletin.Author, b.bulletin.CreatedAt.Format("January 2, 2006"))
+	infoColored := colorScheme.Colorize(info, "secondary")
+	centeredInfo := colorScheme.CenterText(infoColored, 79)
+	contentLines = append(contentLines, centeredInfo, "")
 
-	// Display bulletin page by page
-	for page := 0; page < totalPages; page++ {
-		writer.Write([]byte(menu.ClearContentArea))
-
-		// Header with bulletin title
-		header := fmt.Sprintf("--- %s ---", b.bulletin.Title)
-		headerColored := colorScheme.Colorize(header, "primary")
-		centeredHeader := colorScheme.CenterText(headerColored, 79)
-		writer.Write([]byte(centeredHeader + "\n"))
-
-		separator := colorScheme.DrawSeparator(len(header), "═")
-		centeredSeparator := colorScheme.CenterText(separator, 79)
-		writer.Write([]byte(centeredSeparator + "\n\n"))
-
-		// Author and date info
-		info := fmt.Sprintf("By: %s | Date: %s", b.bulletin.Author, b.bulletin.CreatedAt.Format("January 2, 2006"))
-		infoColored := colorScheme.Colorize(info, "secondary")
-		centeredInfo := colorScheme.CenterText(infoColored, 79)
-		writer.Write([]byte(centeredInfo + "\n\n"))
-
-		// Display this page's content
-		startLine := page * availableBodyLines
-		endLine := startLine + availableBodyLines
-		if endLine > len(bodyLines) {
-			endLine = len(bodyLines)
-		}
-
-		for _, line := range bodyLines[startLine:endLine] {
-			if strings.TrimSpace(line) == "" {
-				writer.Write([]byte("\n"))
-			} else {
-				lineColored := colorScheme.Colorize(line, "text")
-				centeredLine := colorScheme.CenterText(lineColored, 79)
-				writer.Write([]byte(centeredLine + "\n"))
-			}
-		}
-
-		// Prompt based on page position
-		writer.Write([]byte("\n"))
-		var prompt string
-		if page < totalPages-1 {
-			// More pages to show
-			pageInfo := fmt.Sprintf("(Page %d/%d) ", page+1, totalPages)
-			prompt = colorScheme.Colorize(pageInfo, "secondary") +
-				colorScheme.Colorize("Press ", "text") +
-				colorScheme.Colorize("any key", "accent") +
-				colorScheme.Colorize(" to continue...", "text")
+	// Add body lines with proper formatting
+	for _, line := range bodyLines {
+		if strings.TrimSpace(line) == "" {
+			contentLines = append(contentLines, "")
 		} else {
-			// Last page
-			prompt = colorScheme.Colorize("Press ", "text") +
-				colorScheme.Colorize("any key", "accent") +
-				colorScheme.Colorize(" to return to bulletin list...", "text")
+			lineColored := colorScheme.Colorize(line, "text")
+			centeredLine := colorScheme.CenterText(lineColored, 79)
+			contentLines = append(contentLines, centeredLine)
 		}
-		centeredPrompt := colorScheme.CenterText(prompt, 79)
-		writer.Write([]byte(centeredPrompt + "\n"))
-
-		keyReader.ReadKey()
 	}
+
+	// Create terminal sizer from writer (will use real terminal dimensions)
+	termSizer := pager.NewTerminalSizerFromWriter(writer)
+
+	// Create pager adapter that uses real terminal dimensions
+	writerAdapter := pager.NewWriterAdapter(writer, termSizer)
+
+	// Check if writer implements StatusBarManager (e.g., TerminalWriter does)
+	// This uses type assertion to provide status bar control without polluting interfaces
+	type StatusBarController interface {
+		Pause()
+		Resume()
+	}
+	if sbCtrl, ok := writer.(StatusBarController); ok {
+		writerAdapter.WithStatusBarManager(sbCtrl)
+	}
+
+	// Create pager instance
+	p := pager.NewPager(writerAdapter, keyReader, writerAdapter, colorScheme)
+
+	// Pass status bar control to pager if available
+	if writerAdapter.StatusBarMgr != nil {
+		p.WithStatusBar(writerAdapter)
+	}
+
+	// Display bulletin using pager
+	title := fmt.Sprintf("--- %s ---", b.bulletin.Title)
+	p.Display(contentLines, title)
 
 	return true
 }

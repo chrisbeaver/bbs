@@ -182,6 +182,36 @@ type TerminalWriter struct {
 	pendingRedraw        bool
 }
 
+// Pause pauses status bar updates (for pager compatibility)
+func (w *TerminalWriter) Pause() {
+	if w.session.statusBar != nil {
+		w.session.statusBar.Pause()
+	}
+}
+
+// Resume resumes status bar updates (for pager compatibility)
+func (w *TerminalWriter) Resume() {
+	if w.session.statusBar != nil {
+		w.session.statusBar.Resume()
+	}
+}
+
+// Size returns the terminal dimensions (for pager compatibility)
+func (w *TerminalWriter) Size() (width, height int, err error) {
+	if w.session.terminal != nil {
+		return w.session.terminal.Size()
+	}
+	return 80, 24, nil // Fallback dimensions
+}
+
+// ForceStatusBarRedraw forces an immediate synchronous status bar redraw
+// This version does NOT restore the cursor, leaving it at the status bar line
+func (w *TerminalWriter) ForceStatusBarRedraw() {
+	if w.session.statusBar != nil {
+		w.doStatusBarRedrawNoRestore()
+	}
+}
+
 func (w *TerminalWriter) Write(data []byte) (int, error) {
 	// For SSH terminals, use the underlying term.Terminal for proper ANSI handling
 	if sshTerm, ok := w.session.terminal.(*terminal.SSHTerminal); ok {
@@ -242,7 +272,8 @@ func (w *TerminalWriter) handleStatusBarRedraw(data []byte) {
 	}
 }
 
-// doStatusBarRedraw performs the actual status bar redraw
+// doStatusBarRedraw performs the actual status bar redraw with save/restore cursor
+// Used for timer updates to avoid disrupting the display
 func (w *TerminalWriter) doStatusBarRedraw() {
 	// Get terminal height for proper positioning
 	_, height, err := w.session.terminal.Size()
@@ -264,6 +295,36 @@ func (w *TerminalWriter) doStatusBarRedraw() {
 
 	// Combine all the positioning and content
 	statusBarOutput := saveCursor + positionCode + statusBarContent + restoreCursor
+
+	// Write status bar directly to terminal (avoid recursion)
+	if sshTerm, ok := w.session.terminal.(*terminal.SSHTerminal); ok {
+		terminalInstance := sshTerm.GetTerminal()
+		terminalInstance.Write([]byte(statusBarOutput))
+	} else if localTerm, ok := w.session.terminal.(*terminal.LocalTerminal); ok {
+		terminalInstance := localTerm.GetTerminal()
+		terminalInstance.Write([]byte(statusBarOutput))
+	} else {
+		w.session.terminal.Write([]byte(statusBarOutput))
+	}
+}
+
+// doStatusBarRedrawNoRestore performs status bar redraw WITHOUT restoring cursor
+// Used by pager to ensure cursor stays at status bar line
+func (w *TerminalWriter) doStatusBarRedrawNoRestore() {
+	// Get terminal height for proper positioning
+	_, height, err := w.session.terminal.Size()
+	if err != nil {
+		height = 24 // Default height
+	}
+
+	// Position cursor at bottom line and clear the line
+	positionCode := fmt.Sprintf("\033[%d;1H\033[2K", height)
+
+	// Get status bar content without positioning
+	statusBarContent := w.session.statusBar.RenderContent()
+
+	// Combine positioning and content (no cursor save/restore)
+	statusBarOutput := positionCode + statusBarContent
 
 	// Write status bar directly to terminal (avoid recursion)
 	if sshTerm, ok := w.session.terminal.(*terminal.SSHTerminal); ok {
