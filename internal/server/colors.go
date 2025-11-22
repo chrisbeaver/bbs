@@ -140,16 +140,23 @@ func (cs *ColorScheme) HighlightSelection(text string, selected bool, width int)
 	textLen := len(cleanText)
 
 	if selected {
-		// Create a full-width highlight bar - NO BACKGROUND COLOR, just bright white text
+		// Create a full-width highlight bar with background color
 		padding := width - textLen - 2 // Account for leading and trailing spaces
 		if padding < 0 {
 			padding = 0
 		}
 
-		// For selected items, change text to bright white while keeping hotkey bright yellow
-		adjustedText := cs.adjustColorsForSelection(text)
-		highlightText := " " + adjustedText + strings.Repeat(" ", padding) + " "
-		return highlightText // No background color applied
+		// Classic BBS selection bar: cyan background with black text
+		bgCyan := "\033[46m"      // Cyan background
+		fgBlack := "\033[30m"     // Black text
+		reset := "\033[0m"        // Reset
+
+		// Strip existing colors from text for selection bar
+		cleanText := cs.stripAnsiCodes(text)
+
+		// Build selection bar with background color spanning full width
+		highlightText := bgCyan + fgBlack + " " + cleanText + strings.Repeat(" ", padding) + " " + reset
+		return highlightText
 	}
 	// Non-selected items get normal padding
 	padding := width - textLen - 2 // Account for leading and trailing spaces

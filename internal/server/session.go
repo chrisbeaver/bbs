@@ -545,7 +545,7 @@ func (s *Session) executeCommand(item *config.MenuItem) bool {
 	case "sysop_menu":
 		// Check if user has sysop access
 		if s.user == nil || s.user.AccessLevel < 255 {
-			s.write([]byte(s.colorScheme.Colorize("Access denied. Sysop privileges required.", "error") + "\n"))
+			s.write([]byte("\n\n" + s.colorScheme.Colorize("Access denied. Sysop privileges required.", "error") + "\n"))
 			s.waitForKey()
 			return true
 		}
@@ -557,7 +557,7 @@ func (s *Session) executeCommand(item *config.MenuItem) bool {
 	// Sysop command handlers
 	case "create_user":
 		if s.user == nil || s.user.AccessLevel < 255 {
-			s.write([]byte(s.colorScheme.Colorize("Access denied. Sysop privileges required.", "error") + "\n"))
+			s.write([]byte("\n\n" + s.colorScheme.Colorize("Access denied. Sysop privileges required.", "error") + "\n"))
 			s.waitForKey()
 			return true
 		}
@@ -565,7 +565,7 @@ func (s *Session) executeCommand(item *config.MenuItem) bool {
 		return true
 	case "edit_user":
 		if s.user == nil || s.user.AccessLevel < 255 {
-			s.write([]byte(s.colorScheme.Colorize("Access denied. Sysop privileges required.", "error") + "\n"))
+			s.write([]byte("\n\n" + s.colorScheme.Colorize("Access denied. Sysop privileges required.", "error") + "\n"))
 			s.waitForKey()
 			return true
 		}
@@ -573,7 +573,7 @@ func (s *Session) executeCommand(item *config.MenuItem) bool {
 		return true
 	case "delete_user":
 		if s.user == nil || s.user.AccessLevel < 255 {
-			s.write([]byte(s.colorScheme.Colorize("Access denied. Sysop privileges required.", "error") + "\n"))
+			s.write([]byte("\n\n" + s.colorScheme.Colorize("Access denied. Sysop privileges required.", "error") + "\n"))
 			s.waitForKey()
 			return true
 		}
@@ -581,7 +581,7 @@ func (s *Session) executeCommand(item *config.MenuItem) bool {
 		return true
 	case "view_users":
 		if s.user == nil || s.user.AccessLevel < 255 {
-			s.write([]byte(s.colorScheme.Colorize("Access denied. Sysop privileges required.", "error") + "\n"))
+			s.write([]byte("\n\n" + s.colorScheme.Colorize("Access denied. Sysop privileges required.", "error") + "\n"))
 			s.waitForKey()
 			return true
 		}
@@ -589,7 +589,7 @@ func (s *Session) executeCommand(item *config.MenuItem) bool {
 		return true
 	case "change_password":
 		if s.user == nil || s.user.AccessLevel < 255 {
-			s.write([]byte(s.colorScheme.Colorize("Access denied. Sysop privileges required.", "error") + "\n"))
+			s.write([]byte("\n\n" + s.colorScheme.Colorize("Access denied. Sysop privileges required.", "error") + "\n"))
 			s.waitForKey()
 			return true
 		}
@@ -597,7 +597,7 @@ func (s *Session) executeCommand(item *config.MenuItem) bool {
 		return true
 	case "toggle_user":
 		if s.user == nil || s.user.AccessLevel < 255 {
-			s.write([]byte(s.colorScheme.Colorize("Access denied. Sysop privileges required.", "error") + "\n"))
+			s.write([]byte("\n\n" + s.colorScheme.Colorize("Access denied. Sysop privileges required.", "error") + "\n"))
 			s.waitForKey()
 			return true
 		}
@@ -605,7 +605,7 @@ func (s *Session) executeCommand(item *config.MenuItem) bool {
 		return true
 	case "system_stats":
 		if s.user == nil || s.user.AccessLevel < 255 {
-			s.write([]byte(s.colorScheme.Colorize("Access denied. Sysop privileges required.", "error") + "\n"))
+			s.write([]byte("\n\n" + s.colorScheme.Colorize("Access denied. Sysop privileges required.", "error") + "\n"))
 			s.waitForKey()
 			return true
 		}
@@ -613,7 +613,7 @@ func (s *Session) executeCommand(item *config.MenuItem) bool {
 		return true
 	case "bulletin_management":
 		if s.user == nil || s.user.AccessLevel < 255 {
-			s.write([]byte(s.colorScheme.Colorize("Access denied. Sysop privileges required.", "error") + "\n"))
+			s.write([]byte("\n\n" + s.colorScheme.Colorize("Access denied. Sysop privileges required.", "error") + "\n"))
 			s.waitForKey()
 			return true
 		}
@@ -636,7 +636,7 @@ func (s *Session) executeCommand(item *config.MenuItem) bool {
 			s.currentMenu = item.ID
 			s.selectedIndex = 0
 		} else {
-			s.write([]byte(s.colorScheme.Colorize(fmt.Sprintf("Command '%s' not implemented yet.", item.Command), "text") + "\n"))
+			s.write([]byte("\n\n" + s.colorScheme.Colorize(fmt.Sprintf("Command '%s' not implemented yet.", item.Command), "text") + "\n"))
 			s.waitForKey()
 		}
 		return true

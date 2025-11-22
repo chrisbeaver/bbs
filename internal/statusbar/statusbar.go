@@ -87,6 +87,10 @@ func (sb *StatusBar) InitializeFixed(terminalHeight int) string {
 	sb.height = terminalHeight
 	sb.isInitialized = true
 
+	// Set scroll region to protect status bar (lines 1 to height-1)
+	// This prevents content from scrolling over the status bar
+	scrollRegion := fmt.Sprintf("\033[1;%dr", terminalHeight-1)
+
 	// Position cursor at status bar line and render status bar
 	positionCode := fmt.Sprintf("\033[%d;1H", terminalHeight)
 	statusBarContent := sb.Render()
@@ -94,7 +98,7 @@ func (sb *StatusBar) InitializeFixed(terminalHeight int) string {
 	// Position cursor back to top of content area
 	cursorToTop := "\033[1;1H"
 
-	return positionCode + statusBarContent + cursorToTop
+	return scrollRegion + positionCode + statusBarContent + cursorToTop
 }
 
 // GetContentHeight returns usable screen height (excluding status bar)

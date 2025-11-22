@@ -42,45 +42,82 @@ func (b *BulletinOption) GetDescription() string {
 
 // Execute implements MenuOption interface
 func (b *BulletinOption) Execute(writer modules.Writer, keyReader modules.KeyReader, db *database.DB, colorScheme menu.ColorScheme) bool {
-	writer.Write([]byte(menu.ClearContentArea))
+	// Available screen height accounting for status bar
+	// Using 20 lines for content to be safe (typical 24 line terminal - status bar - headers - prompts)
+	const maxContentLines = 18
 
-	// Header with bulletin title
-	header := fmt.Sprintf("--- %s ---", b.bulletin.Title)
-	headerColored := colorScheme.Colorize(header, "primary")
-	centeredHeader := colorScheme.CenterText(headerColored, 79)
-	writer.Write([]byte(centeredHeader + "\n"))
-
-	separator := colorScheme.DrawSeparator(len(header), "═")
-	centeredSeparator := colorScheme.CenterText(separator, 79)
-	writer.Write([]byte(centeredSeparator + "\n\n"))
-
-	// Author and date info
-	info := fmt.Sprintf("By: %s | Date: %s", b.bulletin.Author, b.bulletin.CreatedAt.Format("January 2, 2006"))
-	infoColored := colorScheme.Colorize(info, "secondary")
-	centeredInfo := colorScheme.CenterText(infoColored, 79)
-	writer.Write([]byte(centeredInfo + "\n\n"))
-
-	// Bulletin body - word wrap at 75 characters and center
+	// Prepare bulletin content
 	bodyLines := wrapText(b.bulletin.Body, 75)
-	for _, line := range bodyLines {
-		if strings.TrimSpace(line) == "" {
-			writer.Write([]byte("\n"))
-		} else {
-			lineColored := colorScheme.Colorize(line, "text")
-			centeredLine := colorScheme.CenterText(lineColored, 79)
-			writer.Write([]byte(centeredLine + "\n"))
-		}
+
+	// Header lines (4 lines total: title, separator, info, blank)
+	headerLines := 4
+
+	// Calculate total pages needed
+	availableBodyLines := maxContentLines - headerLines - 1 // -1 for prompt line
+	totalPages := (len(bodyLines) + availableBodyLines - 1) / availableBodyLines
+	if totalPages < 1 {
+		totalPages = 1
 	}
 
-	// Return prompt
-	writer.Write([]byte("\n"))
-	prompt := colorScheme.Colorize("Press ", "text") +
-		colorScheme.Colorize("any key", "accent") +
-		colorScheme.Colorize(" to return to bulletin list...", "text")
-	centeredPrompt := colorScheme.CenterText(prompt, 79)
-	writer.Write([]byte(centeredPrompt))
+	// Display bulletin page by page
+	for page := 0; page < totalPages; page++ {
+		writer.Write([]byte(menu.ClearContentArea))
 
-	keyReader.ReadKey()
+		// Header with bulletin title
+		header := fmt.Sprintf("--- %s ---", b.bulletin.Title)
+		headerColored := colorScheme.Colorize(header, "primary")
+		centeredHeader := colorScheme.CenterText(headerColored, 79)
+		writer.Write([]byte(centeredHeader + "\n"))
+
+		separator := colorScheme.DrawSeparator(len(header), "═")
+		centeredSeparator := colorScheme.CenterText(separator, 79)
+		writer.Write([]byte(centeredSeparator + "\n\n"))
+
+		// Author and date info
+		info := fmt.Sprintf("By: %s | Date: %s", b.bulletin.Author, b.bulletin.CreatedAt.Format("January 2, 2006"))
+		infoColored := colorScheme.Colorize(info, "secondary")
+		centeredInfo := colorScheme.CenterText(infoColored, 79)
+		writer.Write([]byte(centeredInfo + "\n\n"))
+
+		// Display this page's content
+		startLine := page * availableBodyLines
+		endLine := startLine + availableBodyLines
+		if endLine > len(bodyLines) {
+			endLine = len(bodyLines)
+		}
+
+		for _, line := range bodyLines[startLine:endLine] {
+			if strings.TrimSpace(line) == "" {
+				writer.Write([]byte("\n"))
+			} else {
+				lineColored := colorScheme.Colorize(line, "text")
+				centeredLine := colorScheme.CenterText(lineColored, 79)
+				writer.Write([]byte(centeredLine + "\n"))
+			}
+		}
+
+		// Prompt based on page position
+		writer.Write([]byte("\n"))
+		var prompt string
+		if page < totalPages-1 {
+			// More pages to show
+			pageInfo := fmt.Sprintf("(Page %d/%d) ", page+1, totalPages)
+			prompt = colorScheme.Colorize(pageInfo, "secondary") +
+				colorScheme.Colorize("Press ", "text") +
+				colorScheme.Colorize("any key", "accent") +
+				colorScheme.Colorize(" to continue...", "text")
+		} else {
+			// Last page
+			prompt = colorScheme.Colorize("Press ", "text") +
+				colorScheme.Colorize("any key", "accent") +
+				colorScheme.Colorize(" to return to bulletin list...", "text")
+		}
+		centeredPrompt := colorScheme.CenterText(prompt, 79)
+		writer.Write([]byte(centeredPrompt + "\n"))
+
+		keyReader.ReadKey()
+	}
+
 	return true
 }
 

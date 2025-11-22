@@ -187,7 +187,7 @@ func (r *MenuRenderer) renderInstructions(instructionText string) {
 
 	// Apply the padding calculated from plain text to the colored version
 	centeredInstructions := strings.Repeat(" ", padding) + coloredInstructions
-	r.writer.Write([]byte("\n" + centeredInstructions))
+	r.writer.Write([]byte("\n" + centeredInstructions + "\n"))
 }
 
 // calculateMaxWidth determines the maximum width needed for menu items

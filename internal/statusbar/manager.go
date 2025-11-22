@@ -17,6 +17,7 @@ type Manager struct {
 	updateTicker   *time.Ticker
 	stopChan       chan bool
 	isInitialized  bool
+	paused         bool
 }
 
 // NewManager creates a new status bar manager
@@ -54,9 +55,15 @@ func (m *Manager) Start(updateInterval time.Duration) <-chan string {
 			select {
 			case <-m.updateTicker.C:
 				// Only update the timer portion to avoid flicker
-				timerUpdate := m.getTimerUpdate()
-				if timerUpdate != "" {
-					updateChan <- timerUpdate
+				m.mu.RLock()
+				isPaused := m.paused
+				m.mu.RUnlock()
+
+				if !isPaused {
+					timerUpdate := m.getTimerUpdate()
+					if timerUpdate != "" {
+						updateChan <- timerUpdate
+					}
 				}
 			case <-m.stopChan:
 				return
@@ -79,6 +86,20 @@ func (m *Manager) Stop() {
 	case m.stopChan <- true:
 	default:
 	}
+}
+
+// Pause pauses timer updates (useful when waiting for user input)
+func (m *Manager) Pause() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.paused = true
+}
+
+// Resume resumes timer updates
+func (m *Manager) Resume() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.paused = false
 }
 
 // RenderNow returns the current status bar immediately
@@ -124,7 +145,7 @@ func (m *Manager) RenderAtPosition(terminalHeight int) string {
 	// Update terminal height in case it changed
 	m.terminalHeight = terminalHeight
 
-	// Position cursor at status bar line and render status bar
+	// Position to status bar line and render
 	positionCode := fmt.Sprintf("\033[%d;1H", terminalHeight)
 	statusBarContent := m.statusBar.Render()
 
@@ -179,6 +200,8 @@ func (m *Manager) getTimerUpdate() string {
 	clearSpaces := strings.Repeat(" ", len(rightSection))
 	repositionCode := fmt.Sprintf("\033[%d;%dH", m.terminalHeight, timerStartCol)
 
+	// Just update the timer, don't move cursor afterward
+	// The scroll region protects the status bar, and cursor is hidden anyway
 	return fmt.Sprintf("%s%s%s%s%s%s%s%s",
 		positionCode, blue, clearSpaces,
 		repositionCode, blue, brightYellow, rightSection, reset)
