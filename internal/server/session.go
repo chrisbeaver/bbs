@@ -9,6 +9,7 @@ import (
 	"bbs/internal/database"
 	"bbs/internal/menu"
 	"bbs/internal/modules/bulletins"
+	"bbs/internal/modules/messages"
 	"bbs/internal/modules/sysop/user_editor"
 	"bbs/internal/statusbar"
 	"bbs/internal/terminal"
@@ -620,9 +621,9 @@ func (s *Session) executeCommand(item *config.MenuItem) bool {
 		s.handleSysopCommand("bulletin_management")
 		return true
 	case "messages":
-		// TODO: Implement messages module
-		s.write([]byte(s.colorScheme.Colorize("Messages feature coming soon...", "text") + "\n"))
-		s.waitForKey()
+		messagesModule := messages.NewModule(s.db, s.colorScheme)
+		keyReader := &TerminalKeyReader{session: s}
+		messagesModule.Execute(s.writer, keyReader)
 		return true
 	case "goodbye":
 		return false

@@ -45,6 +45,34 @@ type Bulletin struct {
 	ExpiresAt *time.Time `json:"expires_at"`
 }
 
+// Message board structures
+type Topic struct {
+	ID          int       `json:"id"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	CreatedAt   time.Time `json:"created_at"`
+	IsActive    bool      `json:"is_active"`
+}
+
+type Post struct {
+	ID        int       `json:"id"`
+	TopicID   int       `json:"topic_id"`
+	UserID    int       `json:"user_id"`
+	Username  string    `json:"username"`
+	Subject   string    `json:"subject"`
+	Body      string    `json:"body"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type Reply struct {
+	ID        int       `json:"id"`
+	PostID    int       `json:"post_id"`
+	UserID    int       `json:"user_id"`
+	Username  string    `json:"username"`
+	Body      string    `json:"body"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
 func Initialize(dbPath string) (*DB, error) {
 	conn, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
@@ -101,6 +129,34 @@ func (db *DB) createTables() error {
 			username TEXT NOT NULL,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			last_activity DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE TABLE IF NOT EXISTS topics (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			name TEXT UNIQUE NOT NULL,
+			description TEXT,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			is_active BOOLEAN DEFAULT 1
+		)`,
+		`CREATE TABLE IF NOT EXISTS posts (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			topic_id INTEGER NOT NULL,
+			user_id INTEGER NOT NULL,
+			username TEXT NOT NULL,
+			subject TEXT NOT NULL,
+			body TEXT NOT NULL,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (topic_id) REFERENCES topics(id),
+			FOREIGN KEY (user_id) REFERENCES users(id)
+		)`,
+		`CREATE TABLE IF NOT EXISTS replies (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			post_id INTEGER NOT NULL,
+			user_id INTEGER NOT NULL,
+			username TEXT NOT NULL,
+			body TEXT NOT NULL,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (post_id) REFERENCES posts(id),
+			FOREIGN KEY (user_id) REFERENCES users(id)
 		)`,
 	}
 
@@ -292,6 +348,127 @@ func (db *DB) UpdateBulletin(id int, title, body string) error {
 func (db *DB) DeleteBulletin(id int) error {
 	query := `DELETE FROM bulletins WHERE id = ?`
 	_, err := db.conn.Exec(query, id)
+	return err
+}
+
+// Message Board Methods
+
+// Topic management
+func (db *DB) GetTopics() ([]Topic, error) {
+	query := `SELECT id, name, description, created_at, is_active FROM topics WHERE is_active = 1 ORDER BY name`
+
+	rows, err := db.conn.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var topics []Topic
+	for rows.Next() {
+		var topic Topic
+		err := rows.Scan(&topic.ID, &topic.Name, &topic.Description, &topic.CreatedAt, &topic.IsActive)
+		if err != nil {
+			return nil, err
+		}
+		topics = append(topics, topic)
+	}
+
+	return topics, nil
+}
+
+func (db *DB) GetTopic(id int) (*Topic, error) {
+	topic := &Topic{}
+	query := `SELECT id, name, description, created_at, is_active FROM topics WHERE id = ?`
+
+	err := db.conn.QueryRow(query, id).Scan(&topic.ID, &topic.Name, &topic.Description,
+		&topic.CreatedAt, &topic.IsActive)
+	if err != nil {
+		return nil, err
+	}
+
+	return topic, nil
+}
+
+func (db *DB) CreateTopic(name, description string) error {
+	query := `INSERT INTO topics (name, description, created_at, is_active) VALUES (?, ?, ?, 1)`
+	_, err := db.conn.Exec(query, name, description, time.Now())
+	return err
+}
+
+// Post management
+func (db *DB) GetPostsByTopic(topicID int) ([]Post, error) {
+	query := `SELECT id, topic_id, user_id, username, subject, body, created_at 
+			  FROM posts WHERE topic_id = ? ORDER BY created_at DESC`
+
+	rows, err := db.conn.Query(query, topicID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var posts []Post
+	for rows.Next() {
+		var post Post
+		err := rows.Scan(&post.ID, &post.TopicID, &post.UserID, &post.Username,
+			&post.Subject, &post.Body, &post.CreatedAt)
+		if err != nil {
+			return nil, err
+		}
+		posts = append(posts, post)
+	}
+
+	return posts, nil
+}
+
+func (db *DB) GetPost(id int) (*Post, error) {
+	post := &Post{}
+	query := `SELECT id, topic_id, user_id, username, subject, body, created_at FROM posts WHERE id = ?`
+
+	err := db.conn.QueryRow(query, id).Scan(&post.ID, &post.TopicID, &post.UserID,
+		&post.Username, &post.Subject, &post.Body, &post.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+
+	return post, nil
+}
+
+func (db *DB) CreatePost(topicID, userID int, username, subject, body string) error {
+	query := `INSERT INTO posts (topic_id, user_id, username, subject, body, created_at) 
+			  VALUES (?, ?, ?, ?, ?, ?)`
+	_, err := db.conn.Exec(query, topicID, userID, username, subject, body, time.Now())
+	return err
+}
+
+// Reply management
+func (db *DB) GetRepliesByPost(postID int) ([]Reply, error) {
+	query := `SELECT id, post_id, user_id, username, body, created_at 
+			  FROM replies WHERE post_id = ? ORDER BY created_at ASC`
+
+	rows, err := db.conn.Query(query, postID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var replies []Reply
+	for rows.Next() {
+		var reply Reply
+		err := rows.Scan(&reply.ID, &reply.PostID, &reply.UserID, &reply.Username,
+			&reply.Body, &reply.CreatedAt)
+		if err != nil {
+			return nil, err
+		}
+		replies = append(replies, reply)
+	}
+
+	return replies, nil
+}
+
+func (db *DB) CreateReply(postID, userID int, username, body string) error {
+	query := `INSERT INTO replies (post_id, user_id, username, body, created_at) 
+			  VALUES (?, ?, ?, ?, ?)`
+	_, err := db.conn.Exec(query, postID, userID, username, body, time.Now())
 	return err
 }
 

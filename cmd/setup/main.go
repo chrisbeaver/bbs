@@ -40,6 +40,15 @@ func main() {
 		fmt.Println("Successfully loaded bulletins from seed data")
 	}
 
+	// Load topics from seed data
+	fmt.Println("Loading topics from seed data...")
+	err = db.LoadTopicsFromSeed()
+	if err != nil {
+		fmt.Printf("Error loading topics from seed data: %v\n", err)
+	} else {
+		fmt.Println("Successfully loaded topics from seed data")
+	}
+
 	fmt.Println("\nDatabase setup complete!")
 	fmt.Println("You can now run the BBS server with: go run main.go")
 	fmt.Println("Connect via SSH: ssh -p 2323 sysop@localhost (password: password)")

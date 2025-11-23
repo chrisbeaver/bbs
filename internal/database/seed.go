@@ -21,6 +21,12 @@ type UserSeed struct {
 	IsActive    bool
 }
 
+// TopicSeed represents a topic for seeding
+type TopicSeed struct {
+	Name        string
+	Description string
+}
+
 // getSeedUsers returns the default users for seeding the database
 func getSeedUsers() []UserSeed {
 	return []UserSeed{
@@ -39,6 +45,24 @@ func getSeedUsers() []UserSeed {
 			Email:       "test@localhost",
 			AccessLevel: 10,
 			IsActive:    true,
+		},
+	}
+}
+
+// getSeedTopics returns the default topics for seeding the database
+func getSeedTopics() []TopicSeed {
+	return []TopicSeed{
+		{
+			Name:        "General",
+			Description: "General discussion and community topics",
+		},
+		{
+			Name:        "Development",
+			Description: "Software development, programming, and technical discussions",
+		},
+		{
+			Name:        "Gaming",
+			Description: "Video games, retro gaming, and gaming culture",
 		},
 	}
 }
@@ -283,6 +307,39 @@ func (db *DB) bulletinExists(title string) (bool, error) {
 	query := `SELECT COUNT(*) FROM bulletins WHERE title = ?`
 	var count int
 	err := db.conn.QueryRow(query, title).Scan(&count)
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
+// LoadTopicsFromSeed loads default topics into the database
+func (db *DB) LoadTopicsFromSeed() error {
+	seedTopics := getSeedTopics()
+
+	// Insert topics into database
+	for _, seedTopic := range seedTopics {
+		// Check if topic already exists (by name)
+		exists, err := db.topicExists(seedTopic.Name)
+		if err != nil {
+			return err
+		}
+
+		if !exists {
+			if err := db.CreateTopic(seedTopic.Name, seedTopic.Description); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+// topicExists checks if a topic with the given name already exists
+func (db *DB) topicExists(name string) (bool, error) {
+	query := `SELECT COUNT(*) FROM topics WHERE name = ?`
+	var count int
+	err := db.conn.QueryRow(query, name).Scan(&count)
 	if err != nil {
 		return false, err
 	}
